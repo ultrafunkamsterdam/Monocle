@@ -1,6 +1,6 @@
 # Monocle
 
-[![Build Status](https://travis-ci.org/Noctem/Monocle.svg?branch=develop)](https://travis-ci.org/Noctem/Monocle)
+[![Build Status](https://travis-ci.org/ZeChrales/Monocle.svg?branch=develop)](https://travis-ci.org/ZeChrales/Monocle)
 
 Monocle is the distinguished Pokémon Go scanner capable of scanning large areas for spawns. Features spawnpoint scanning, Twitter and PushBullet notifications, accurate expiration times and estimates based on historical data, pokestop and gym collection, a CAPTCHA solving script, and more.
 
@@ -43,7 +43,7 @@ Since it uses [Leaflet](http://leafletjs.com/) for mapping, the appearance and d
 
 ## Setting up
 1. Install Python 3.5 or later (3.6 is recommended)
-2. `git clone --recursive https://github.com/Noctem/Monocle.git`
+2. `git clone --recursive https://github.com/ZeChrales/Monocle.git`
   * Optionally install a custom icon package from elsewhere
 3. Copy *config.example.py* to *monocle/config.py* and customize it with your location, database information, and any other relevant settings. The comments in the config example provide some information about the options.
 4. Fill in *accounts.example.csv* with your own accounts and save it as *accounts.csv*.
@@ -95,6 +95,6 @@ Visit our [Wiki](https://github.com/Noctem/Monocle/wiki) for more info.
 
 See [LICENSE](LICENSE).
 
-This project is based on the coroutines branch of [pokeminer](https://github.com/modrzew/pokeminer/tree/coroutines) (now discontinued). *Pokeminer* was originally based on an early version of [PokemonGo-Map](https://github.com/AHAAAAAAA/PokemonGo-Map), but no longer shares any code with it. It uses [aiopogo](https://github.com/Noctem/aiopogo), my fork of pgoapi which uses *aiohttp* for asynchronous network requests.
+This project is based on the coroutines branch of [pokeminer](https://github.com/modrzew/pokeminer/tree/coroutines) (now discontinued). *Pokeminer* was originally based on an early version of [PokemonGo-Map](https://github.com/AHAAAAAAA/PokemonGo-Map), but no longer shares any code with it. It uses [aiopogo](https://github.com/ZeChrales/aiopogo), my fork of pgoapi which uses *aiohttp* for asynchronous network requests.
 
 The [excellent image](https://darkestnight.deviantart.com/art/A-Distinguished-Pokeman-208009200) near the top of this README was painted by [darkestnight](https://darkestnight.deviantart.com/).
