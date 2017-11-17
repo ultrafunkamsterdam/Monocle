@@ -2,21 +2,21 @@
 
 DB_ENGINE = 'sqlite:///db.sqlite'
 #DB_ENGINE = 'mysql://user:pass@localhost/monocle'
-#DB_ENGINE = 'postgresql://user:pass@localhost/monocle
+#DB_ENGINE = 'postgresql://user:pass@localhost/monocle'
 
-AREA_NAME = 'SLC'     # the city or region you are scanning
-LANGUAGE = 'EN'       # ISO 639-1 codes EN, DE, ES, FR, IT, JA, KO, PT, or ZH for Pokémon/move names
-MAX_CAPTCHAS = 100    # stop launching new visits if this many CAPTCHAs are pending
-SCAN_DELAY = 10       # wait at least this many seconds before scanning with the same account
-SPEED_UNIT = 'miles'  # valid options are 'miles', 'kilometers', 'meters'
-SPEED_LIMIT = 19.5    # limit worker speed to this many SPEED_UNITs per hour
+AREA_NAME = 'YOURAREA'      # the city or region you are scanning
+LANGUAGE = 'EN'             # ISO 639-1 codes EN, DE, ES, FR, IT, JA, KO, PT, or ZH for Pokémon/move names
+MAX_CAPTCHAS = 100          # stop launching new visits if this many CAPTCHAs are pending
+SCAN_DELAY = 10             # wait at least this many seconds before scanning with the same account
+SPEED_UNIT = 'kilometers'   # valid options are 'miles', 'kilometers', 'meters'
+SPEED_LIMIT = 15            # limit worker speed to this many SPEED_UNITs per hour
 
 # The number of simultaneous workers will be these two numbers multiplied.
 # On the initial run, workers will arrange themselves in a grid across the
 # rectangle you defined with MAP_START and MAP_END.
 # The rows/columns will also be used for the dot grid in the console output.
 # Provide more accounts than the product of your grid to allow swapping.
-GRID = (4, 4)  # rows, columns
+GRID = (19, 19)  # rows, columns
 
 # the corner points of a rectangle for your workers to spread out over before
 # any spawn points have been discovered
@@ -50,10 +50,10 @@ ACCOUNTS_CSV = 'accounts.csv'
 # Lower numbers will increase the amount of time it takes for all workers to
 # get started but are recommended to avoid suddenly flooding the servers with
 # accounts and arousing suspicion.
-SIMULTANEOUS_LOGINS = 4
+SIMULTANEOUS_LOGINS = 2
 
 # Limit the number of workers simulating the app startup process simultaneously.
-SIMULTANEOUS_SIMULATION = 10
+SIMULTANEOUS_SIMULATION = 4
 
 # Immediately select workers whose speed are below (SPEED_UNIT)p/h instead of
 # continuing to try to find the worker with the lowest speed.
@@ -107,7 +107,7 @@ SPIN_COOLDOWN = 300    # spin only one PokéStop every n seconds (default 300)
 
 # minimum number of each item to keep if the bag is cleaned
 # bag cleaning is disabled if this is not present or is commented out
-''' # triple quotes are comments, remove them to use this ITEM_LIMITS example
+
 ITEM_LIMITS = {
     1:    20,  # Poké Ball
     2:    50,  # Great Ball
@@ -124,7 +124,7 @@ ITEM_LIMITS = {
     704:  20,  # Wepar Berry
     705:  20,  # Pinap Berry
 }
-'''
+
 
 # Update the console output every x seconds
 REFRESH_RATE = 0.75  # 750ms
@@ -189,8 +189,8 @@ FAILURES_ALLOWED = 2
 
 ## Map data provider and appearance, previews available at:
 ## https://leaflet-extras.github.io/leaflet-providers/preview/
-#MAP_PROVIDER_URL = '//{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-#MAP_PROVIDER_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+MAP_PROVIDER_URL = '//server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+MAP_PROVIDER_ATTRIBUTION = '&copy;ESRI'
 
 # set of proxy addresses and ports
 # SOCKS requires aiosocks to be installed
@@ -198,7 +198,7 @@ FAILURES_ALLOWED = 2
 
 # convert spawn_id to integer for more efficient DB storage, set to False if
 # using an old database since the data types are incompatible.
-#SPAWN_ID_INT = True
+SPAWN_ID_INT = True
 
 # Bytestring key to authenticate with manager for inter-process communication
 #AUTHKEY = b'm3wtw0'
