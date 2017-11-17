@@ -19,11 +19,24 @@ from pogeo import get_distance
 
 from . import bounds, sanitized as conf
 
-# iPhones 5 + 5C (4S is really not playable)
-IPHONES = {'iPhone5,1': 'N41AP',
-           'iPhone5,2': 'N42AP',
-           'iPhone5,3': 'N48AP',
-           'iPhone5,4': 'N49AP'}
+IPHONES = { 'iPhone6,1': 'N51AP',
+            'iPhone6,2': 'N53AP',
+            'iPhone7,1': 'N56AP', 
+            'iPhone7,2': 'N61AP',
+            'iPhone8,1': 'N71AP',
+            'iPhone8,2': 'N66AP',
+            'iPhone8,4': 'N69AP',
+            'iPhone9,1': 'D10AP',
+            'iPhone9,2': 'D11AP',
+            'iPhone9,3': 'D101AP',
+            'iPhone9,4': 'D111AP',
+            'iPhone10,1': 'D20AP', 
+            'iPhone10,2': 'D21AP',
+            'iPhone10,3': 'D22AP',
+            'iPhone10,4': 'D201AP',
+            'iPhone10,5': 'D211AP',
+            'iPhone10,6': 'D221AP'
+            }
 
 
 class Units(Enum):
