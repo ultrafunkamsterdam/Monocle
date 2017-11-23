@@ -867,7 +867,7 @@ class Worker:
                     if (self.fort_modifiers 
                         and 501 in self.fort_modifiers or 'ITEM_TROY_DISK' in self.fort_modifiers 
                         and ((fort.latitude, fort.longitude) < max(conf.LURE_BOUNDS) 
-                        and (fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS))):
+                        and fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS)):
                         self.log.info(repr(self.fort_modifiers))
                         await self.lure_pokestop(fort)
                     if fort.id not in FORT_CACHE.pokestops:
