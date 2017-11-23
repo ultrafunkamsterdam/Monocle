@@ -5,7 +5,7 @@ from queue import Empty
 from itertools import cycle
 from sys import exit
 from distutils.version import StrictVersion
-
+import pprint
 from aiopogo import PGoApi, HashServer, json_loads, exceptions as ex
 from aiopogo.auth_ptc import AuthPtc
 from cyrandom import choice, randint, uniform
@@ -15,6 +15,7 @@ from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE
 from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point
 from .shared import get_logger, LOOP, SessionManager, run_threaded, ACCOUNTS
 from . import altitudes, avatar, bounds, db_proc, spawns, sanitized as conf
+from .names import POKEMON
 
 if conf.NOTIFY or conf.NOTIFY_RAIDS:
     from .notification import Notifier
@@ -92,6 +93,7 @@ class Worker:
             except Empty as e:
                 raise ValueError("You don't have enough accounts for the number of workers specified in GRID.") from e
         self.username = self.account['username']
+        self.log = get_logger('{}'.format(self.username))
         try:
             self.location = self.account['location'][:2]
         except KeyError:
@@ -114,6 +116,7 @@ class Worker:
         self.num_captchas = 0
         self.eggs = {}
         self.unused_incubators = deque()
+        self.fort_modifiers = deque()
         self.initialize_api()
         # State variables
         self.busy = Lock(loop=LOOP)
@@ -465,12 +468,20 @@ class Worker:
         return True
 
     def update_inventory(self, inventory_items):
+        self.fort_modifiers.clear()
         for thing in inventory_items:
             obj = thing.inventory_item_data
             if obj.HasField('item'):
                 item = obj.item
                 self.items[item.item_id] = item.count
                 self.bag_items = sum(self.items.values())
+
+                if conf.LURE_POKESTOPS:
+                    if item.item_id == 501 or item.item_id == 'ITEM_TROY_DISK':
+                        self.fort_modifiers.append(item.item_id)
+                        self.log.info('Found a Lure Module!. Adding to inventory.')
+                        self.log.info('Current contents of fort_modifiers : {}', repr(self.fort_modifiers))
+
             elif conf.INCUBATE_EGGS:
                 if obj.HasField('pokemon_data') and obj.pokemon_data.is_egg:
                     egg = obj.pokemon_data
@@ -746,7 +757,7 @@ class Worker:
 
     async def visit_point(self, point, spawn_id, bootstrap,
             encounter_conf=conf.ENCOUNTER, notify_conf=conf.NOTIFY,
-            more_points=conf.MORE_POINTS):
+            more_points=conf.MORE_POINTS, catch_conf=conf.CATCH_POKEMON):
         self.handle.cancel()
         self.error_code = '∞' if bootstrap else '!'
 
@@ -798,11 +809,15 @@ class Worker:
                 normalized = self.normalize_pokemon(pokemon)
                 seen_target = seen_target or normalized['spawn_id'] == spawn_id
 
-                if (normalized not in SIGHTING_CACHE and
-                        normalized not in MYSTERY_CACHE):
-                    if (encounter_conf == 'all'
-                            or (encounter_conf == 'some'
-                            and normalized['pokemon_id'] in conf.ENCOUNTER_IDS)):
+                if (normalized not in SIGHTING_CACHE and normalized not in MYSTERY_CACHE):
+                     
+                    if ((encounter_conf == 'all' or 
+                        (encounter_conf == 'some' and 
+                        normalized['pokemon_id'] in conf.ENCOUNTER_IDS)) 
+                        or 
+                        (catch_conf and normalized['pokemon_id'] in conf.CATCH_IDS and 
+                        self.player_level and 
+                        self.player_level < conf.CATCH_STOP_LEVEL)):
                         try:
                             await self.encounter(normalized, pokemon.spawn_point_id)
                         except CancelledError:
@@ -810,6 +825,14 @@ class Worker:
                             raise
                         except Exception as e:
                             self.log.warning('{} during encounter', e.__class__.__name__)
+
+                        try:
+                            await self.catch_pokemon(normalized, pokemon.spawn_point_id)
+                        except CancelledError:
+                            self.log.warning('catch attempt cancelled')
+                            pass
+                        except Exception as ex:
+                             self.log.warning('{} during catch attempt', ex.__class__.__name__)
 
                 if notify_conf and self.notifier.eligible(normalized):
                     if encounter_conf and 'move_1' not in normalized:
@@ -841,9 +864,16 @@ class Worker:
                         cooldown = fort.cooldown_complete_timestamp_ms
                         if not cooldown or time() > cooldown / 1000:
                             await self.spin_pokestop(fort)
+                    if (self.fort_modifiers 
+                        and 501 in self.fort_modifiers or 'ITEM_TROY_DISK' in self.fort_modifiers 
+                        and ((fort.latitude, fort.longitude) < max(conf.LURE_BOUNDS) 
+                        and (fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS))):
+                        self.log.info(repr(self.fort_modifiers))
+                        await self.lure_pokestop(fort)
                     if fort.id not in FORT_CACHE.pokestops:
                         pokestop = self.normalize_pokestop(fort)
                         db_proc.add(pokestop)
+
                 else:
                     if fort not in FORT_CACHE:
                         db_proc.add(self.normalize_gym(fort))
@@ -922,22 +952,14 @@ class Worker:
         self.error_code = '$'
         pokestop_location = pokestop.latitude, pokestop.longitude
         distance = get_distance(self.location, pokestop_location)
-        # permitted interaction distance - 4 (for some jitter leeway)
-        # estimation of spinning speed limit
+
         if distance > 36 or self.speed > SPINNING_SPEED_LIMIT:
             self.error_code = '!'
             return False
 
-        # randomize location up to ~1.5 meters
         self.simulate_jitter(amount=0.00001)
 
-        request = self.api.create_request()
-        request.fort_details(fort_id = pokestop.id,
-                             latitude = pokestop_location[0],
-                             longitude = pokestop_location[1])
-        responses = await self.call(request, action=1.2)
-        name = responses['FORT_DETAILS'].name
-
+        name = pokestop_location
         request = self.api.create_request()
         request.fort_search(fort_id = pokestop.id,
                             player_latitude = self.location[0],
@@ -952,21 +974,22 @@ class Worker:
             self.log.warning('Invalid Pokéstop spinning response.')
             self.error_code = '!'
             return
-
+        
         if result == 1:
             self.log.info('Spun {}.', name)
             try:
                 inventory_items = responses['GET_INVENTORY'].inventory_delta.inventory_items
                 for item in inventory_items:
-                    level = item.inventory_item_data.player_stats.level
-                    if level and level > self.player_level:
-                        # level_up_rewards if level has changed
-                        request = self.api.create_request()
-                        request.level_up_rewards(level=level)
-                        await self.call(request)
-                        self.log.info('Level up, get rewards.', name)
-                        self.player_level = level
-                        break
+                    if item.inventory_item_data.player_stats.level:
+                        level = item.inventory_item_data.player_stats.level
+                        if level and level > self.player_level:
+                            # level_up_rewards if level has changed
+                            request = self.api.create_request()
+                            request.level_up_rewards(level=level)
+                            await self.call(request)
+                            self.log.info('Level up, get rewards.', name)
+                            self.player_level = level
+                            break
             except KeyError:
                 pass
         elif result == 2:
@@ -987,11 +1010,45 @@ class Worker:
         self.next_spin = time() + conf.SPIN_COOLDOWN
         self.error_code = '!'
 
+
+    async def lure_pokestop(self, pokestop):
+        self.error_code = '+'
+        pokestop_location = pokestop.latitude, pokestop.longitude
+        distance = get_distance(self.location, pokestop_location)
+        if distance > 36 or self.speed > SPINNING_SPEED_LIMIT:
+            self.error_code = '!'
+            return False
+        self.simulate_jitter(amount=0.00001)
+        fort_modifiers = self.fort_modifiers.copy()
+        request = self.api.create_request()
+        request.add_fort_modifier(modifier_type=501, fort_id=pokestop.id, player_latitude=self.location[0], player_longitude=self.location[1])
+        responses = await self.call(request, action=2)
+        try:
+            result = responses['ADD_FORT_MODIFIER'].result
+            if result == 0:
+                self.log.info('no response from server while placing lure module')
+            if result == 1:
+                self.log.info('lure module placed on {}'.format(pokestop.location))
+                fort_modifiers.pop()
+            if result == 2:
+                self.log.info('{} already has a lure module attached'.format(pokestop_location))
+            if result == 3: 
+                self.log.info('{} too far away to place lure module'.format(pokestop_location))
+            if result == 4:
+                self.log.info('while trying to place a lure on {}, i found out do\'t have any modules'.format(pokestop_location))
+                fort_modifiers.clear()
+            if result == 5:
+                self.log.info('pokestop currently closed, so cannot place lure module' )
+            self.error_code = '+'    
+        except:
+            self.log.warning('invalid add_fort_modifier response at pokestop {}'.format(pokestop_location))
+            self.error_code = '!'
+            return
+        self.fort_modifiers = fort_modifiers
+
     async def encounter(self, pokemon, spawn_id):
         distance_to_pokemon = get_distance(self.location, (pokemon['lat'], pokemon['lon']))
-
         self.error_code = '~'
-
         if distance_to_pokemon > 48:
             percent = 1 - (47 / distance_to_pokemon)
             lat_change = (self.location[0] - pokemon['lat']) * percent
@@ -1029,6 +1086,59 @@ class Worker:
         except KeyError:
             self.log.error('Missing encounter response.')
         self.error_code = '!'
+
+
+    async def catch_pokemon(self, pokemon, spawn_id):
+        distance_to_pokemon = get_distance(self.location, (pokemon['lat'], pokemon['lon']))
+        self.error_code = 'q'
+        
+        if distance_to_pokemon > 48:
+            percent = 1 - (47 / distance_to_pokemon)
+            lat_change = (self.location[0] - pokemon['lat']) * percent
+            lon_change = (self.location[1] - pokemon['lon']) * percent
+            self.location = (
+                self.location[0] - lat_change,
+                self.location[1] - lon_change)
+            self.altitude = uniform(self.altitude - 2, self.altitude + 2)
+            self.api.set_position(*self.location, self.altitude)
+            delay_required = min((distance_to_pokemon * percent) / 8, 1.1)
+        else:
+            self.simulate_jitter()
+            delay_required = 1.1
+
+        self.error_code = 'Q'
+        self.log.info('Trying to catch {} ( {} m )'.format(POKEMON[pokemon['pokemon_id']], round(distance_to_pokemon)))
+
+        request = self.api.create_request()
+        normalized_recticle_size = round(uniform(1.60, 1.99), 2)
+
+        request.catch_pokemon(encounter_id=pokemon['encounter_id'],
+                              pokeball=1,
+                              normalized_reticle_size=normalized_recticle_size,
+                              spawn_point_id=spawn_id,
+                              hit_pokemon=True,
+                              spin_modifier=1,
+                              normalized_hit_position=1)
+
+        responses = await self.call(request, action=2.25)
+        try:
+            cresult = responses['CATCH_POKEMON'].status
+            self.error_code = 'Q'
+            if cresult == 0 :
+                self.log.info('Oh no! An error 0 occured while catching {}'.format(POKEMON[pokemon['pokemon_id']]))
+            if cresult == 1 :
+                self.log.info('YES! caught a wild {}'.format(POKEMON[pokemon['pokemon_id']]))
+            if cresult == 2 :
+                self.log.info('Oh no! {} escaped!'.format(POKEMON[pokemon['pokemon_id']]))
+            if cresult == 3 :
+                self.log.info('Oh no! {} fled!'.format(POKEMON[pokemon['pokemon_id']]))
+            if cresult == 4 :
+                self.log.info('Oh no! Missed throw to catch {}'.format(POKEMON[pokemon['pokemon_id']]))
+            self.error_code = '!'
+        except KeyError:
+            self.log.error('Missing catch response.')
+        self.error_code = '!'
+
 
     async def clean_bag(self):
         self.error_code = '|'
@@ -1242,7 +1352,9 @@ class Worker:
         self.num_captchas = 0
         self.eggs = {}
         self.unused_incubators = deque()
+        self.fort_modifiers = deque()
         self.initialize_api()
+
         self.error_code = None
 
     def unset_code(self):
@@ -1291,7 +1403,7 @@ class Worker:
             'lat': raw.latitude,
             'lon': raw.longitude,
             'spawn_id': 0 if conf.SPAWN_ID_INT else 'LURED',
-            'time_till_hidden': (lure.lure_expires_timestamp_ms - now) / 1000,
+            'time_till_hidden': (lure.lure_expires_timestamp_ms - now) // 1000,
             'inferred': 'pokestop'
         }
 

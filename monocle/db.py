@@ -64,7 +64,7 @@ else:
     HUGE_TYPE = TextInt
     FLOAT_TYPE = Float(asdecimal=False)
 
-ID_TYPE = BigInteger if conf.SPAWN_ID_INT else String(11)
+ID_TYPE = BigInteger if conf.SPAWN_ID_INT else String(35)
 
 
 class Team(Enum):
@@ -291,7 +291,7 @@ class Raid(Base):
     __tablename__ = 'raids'
 
     id = Column(Integer, primary_key=True)
-    external_id = Column(String(35), unique=True)
+    external_id = Column(ID_TYPE, unique=True)
     fort_id = Column(Integer, ForeignKey('forts.id'))
     level = Column(TINY_TYPE)
     pokemon_id = Column(SmallInteger)
