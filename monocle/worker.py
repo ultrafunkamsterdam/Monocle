@@ -1,5 +1,5 @@
 from asyncio import gather, Lock, Semaphore, sleep, CancelledError
-from collections import deque
+from collections import deque, Counter
 from time import time, monotonic
 from queue import Empty
 from itertools import cycle
@@ -116,7 +116,6 @@ class Worker:
         self.num_captchas = 0
         self.eggs = {}
         self.unused_incubators = deque()
-        self.fort_modifiers = deque()
         self.initialize_api()
         # State variables
         self.busy = Lock(loop=LOOP)
@@ -468,19 +467,16 @@ class Worker:
         return True
 
     def update_inventory(self, inventory_items):
-        self.fort_modifiers.clear()
         for thing in inventory_items:
             obj = thing.inventory_item_data
             if obj.HasField('item'):
                 item = obj.item
                 self.items[item.item_id] = item.count
                 self.bag_items = sum(self.items.values())
-
                 if conf.LURE_POKESTOPS:
-                    if item.item_id == 501 or item.item_id == 'ITEM_TROY_DISK':
-                        self.fort_modifiers.append(item.item_id)
-                        self.log.info('Found a Lure Module!. Adding to inventory.')
-                        self.log.info('Current contents of fort_modifiers : {}', repr(self.fort_modifiers))
+                    if 501 in self.items:
+                        if self.items[501] > 0:
+                            self.log.info('received a lure module!')
 
             elif conf.INCUBATE_EGGS:
                 if obj.HasField('pokemon_data') and obj.pokemon_data.is_egg:
@@ -495,6 +491,7 @@ class Worker:
                             self.unused_incubators.append(item)
                         else:
                             self.unused_incubators.appendleft(item)
+
 
     async def call(self, request, chain=True, buddy=True, settings=False, inbox=True, dl_hash=True, action=None):
         if chain:
@@ -830,9 +827,9 @@ class Worker:
                             await self.catch_pokemon(normalized, pokemon.spawn_point_id)
                         except CancelledError:
                             self.log.warning('catch attempt cancelled')
-                            pass
+                            raise
                         except Exception as ex:
-                             self.log.warning('{} during catch attempt', ex.__class__.__name__)
+                            self.log.warning('{} during catch attempt', ex.__class__.__name__)
 
                 if notify_conf and self.notifier.eligible(normalized):
                     if encounter_conf and 'move_1' not in normalized:
@@ -864,12 +861,11 @@ class Worker:
                         cooldown = fort.cooldown_complete_timestamp_ms
                         if not cooldown or time() > cooldown / 1000:
                             await self.spin_pokestop(fort)
-                    if (self.fort_modifiers 
-                        and 501 in self.fort_modifiers or 'ITEM_TROY_DISK' in self.fort_modifiers 
-                        and ((fort.latitude, fort.longitude) < max(conf.LURE_BOUNDS) 
-                        and fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS)):
-                        self.log.info(repr(self.fort_modifiers))
-                        await self.lure_pokestop(fort)
+                    if conf.LURE_POKESTOPS and 501 in self.items:
+                        if self.items[501] > 0:
+                            if ((fort.latitude, fort.longitude) < max(conf.LURE_BOUNDS)
+                            and (fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS)):
+                                await self.lure_pokestop(fort)
                     if fort.id not in FORT_CACHE.pokestops:
                         pokestop = self.normalize_pokestop(fort)
                         db_proc.add(pokestop)
@@ -1019,7 +1015,7 @@ class Worker:
             self.error_code = '!'
             return False
         self.simulate_jitter(amount=0.00001)
-        fort_modifiers = self.fort_modifiers.copy()
+        self.log.info('Trying to lure {}'.format(pokestop_location))
         request = self.api.create_request()
         request.add_fort_modifier(modifier_type=501, fort_id=pokestop.id, player_latitude=self.location[0], player_longitude=self.location[1])
         responses = await self.call(request, action=2)
@@ -1028,15 +1024,16 @@ class Worker:
             if result == 0:
                 self.log.info('no response from server while placing lure module')
             if result == 1:
-                self.log.info('lure module placed on {}'.format(pokestop.location))
-                fort_modifiers.pop()
+                pp('lure module placed on {}'.format(pokestop.location))
+                x = self.inventory.index(501)
+                inventory.pop(x)
+                return
             if result == 2:
                 self.log.info('{} already has a lure module attached'.format(pokestop_location))
             if result == 3: 
                 self.log.info('{} too far away to place lure module'.format(pokestop_location))
             if result == 4:
                 self.log.info('while trying to place a lure on {}, i found out do\'t have any modules'.format(pokestop_location))
-                fort_modifiers.clear()
             if result == 5:
                 self.log.info('pokestop currently closed, so cannot place lure module' )
             self.error_code = '+'    
@@ -1044,7 +1041,7 @@ class Worker:
             self.log.warning('invalid add_fort_modifier response at pokestop {}'.format(pokestop_location))
             self.error_code = '!'
             return
-        self.fort_modifiers = fort_modifiers
+        
 
     async def encounter(self, pokemon, spawn_id):
         distance_to_pokemon = get_distance(self.location, (pokemon['lat'], pokemon['lon']))
@@ -1352,7 +1349,7 @@ class Worker:
         self.num_captchas = 0
         self.eggs = {}
         self.unused_incubators = deque()
-        self.fort_modifiers = deque()
+        self.inventory = []
         self.initialize_api()
 
         self.error_code = None
