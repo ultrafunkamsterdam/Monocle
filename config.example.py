@@ -2,7 +2,7 @@
 
 DB_ENGINE = 'sqlite:///db.sqlite'
 #DB_ENGINE = 'mysql://user:pass@localhost/monocle'
-#DB_ENGINE = 'postgresql://user:pass@localhost/monocle
+#DB_ENGINE = 'postgresql://user:pass@localhost/monocle'
 
 AREA_NAME = 'SLC'     # the city or region you are scanning
 LANGUAGE = 'EN'       # ISO 639-1 codes EN, DE, ES, FR, IT, JA, KO, PT, or ZH for Pokémon/move names
