@@ -185,7 +185,7 @@ class Worker:
             raise err
 
         self.error_code = '°'
-        version = 7904
+        version = 8300
         async with self.sim_semaphore:
             self.error_code = 'APP SIMULATION'
             if conf.APP_SIMULATION:
@@ -224,7 +224,7 @@ class Worker:
 
     async def download_remote_config(self, version):
         request = self.api.create_request()
-        request.download_remote_config_version(platform=1, app_version=version)
+        request.download_remote_config_version(platform=1, app_version=version, device_model=account['model'])
         responses = await self.call(request, buddy=False, settings=True, inbox=False, dl_hash=False)
 
         try:
@@ -605,9 +605,9 @@ class Worker:
             else:
                 if (not dl_hash
                         and conf.FORCED_KILL
-                        and dl_settings.settings.minimum_client_version != '0.79.4'):
+                        and dl_settings.settings.minimum_client_version != '0.83.2'):
                     forced_version = StrictVersion(dl_settings.settings.minimum_client_version)
-                    if forced_version > StrictVersion('0.79.4'):
+                    if forced_version > StrictVersion('0.83.2'):
                         err = '{} is being forced, exiting.'.format(forced_version)
                         self.log.error(err)
                         print(err)
