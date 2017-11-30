@@ -224,7 +224,8 @@ class Worker:
 
     async def download_remote_config(self, version):
         request = self.api.create_request()
-        request.download_remote_config_version(platform=1, app_version=version, device_model=account['model'])
+        # to be added : device_model=account['model']
+        request.download_remote_config_version(platform=1, app_version=version)
         responses = await self.call(request, buddy=False, settings=True, inbox=False, dl_hash=False)
 
         try:
