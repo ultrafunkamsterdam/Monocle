@@ -2,4 +2,3 @@
 	path = monocle/static/monocle-icons
 	url = https://github.com/ZeChrales/monocle-icons.git
 	ignore = all
-	branch = larger-outlined
