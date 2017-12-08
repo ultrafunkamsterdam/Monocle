@@ -488,7 +488,7 @@ class Worker:
 
     async def call(self, request, chain=True, buddy=True, settings=True, inbox=True, dl_hash=True, action=None):
         if chain:
-            # request.check_challenge() # not used anymore
+            request.check_challenge()
             request.get_hatched_eggs()
             request.get_inventory(last_timestamp_ms=self.inventory_timestamp)
             request.check_awarded_badges()
