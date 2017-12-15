@@ -565,7 +565,7 @@ $('#reset_btn').on('click', function () {
 $('body').on('click', '.popup_filter_link', function () {
     var id = $(this).data("pokeid");
     var layer = $(this).data("newlayer").toLowerCase();
-    moveToLayer(id, layer);
+    moveToLayer(id, value, 'filter');
     var item = $("#settings button[data-id='"+id+"']");
     item.removeClass("active").filter("[data-value='"+layer+"']").addClass("active");
 });
