@@ -339,7 +339,7 @@ class Weather(Base):
     __tablename__ = 'weather'
 
     id = Column(Integer, primary_key=True)
-    s2_cell_id = Column(Integer)
+    s2_cell_id = Column(BigInteger)
     condition = Column(TINY_TYPE)
     alert_severity = Column(TINY_TYPE)
     warn = Column(Boolean)
