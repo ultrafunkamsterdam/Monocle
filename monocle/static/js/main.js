@@ -67,6 +67,7 @@ var overlays = {
     Raids: L.layerGroup([]),
     Gyms: L.layerGroup([]),
     Pokestops: L.layerGroup([]),
+    Weather: L.layerGroup([]),
     Workers: L.layerGroup([]),
     Spawns: L.layerGroup([]),
     ScanArea: L.layerGroup([])
@@ -90,6 +91,7 @@ monitor(overlays.Pokemon, false)
 monitor(overlays.Trash, true)
 monitor(overlays.Raids, true)
 monitor(overlays.Gyms, true)
+monitor(overlays.Weather, true)
 monitor(overlays.Workers, true)
 
 function getPopupContent (item) {
@@ -394,6 +396,26 @@ function addPokestopsToMap (data, map) {
     });
 }
 
+function addWeatherToMap (data, map) {
+    overlays.Weather.clearLayers();
+    data.forEach(function (item) {
+        var color = 'grey';
+        if (item.alert_severity > 0) {
+            color = 'red';
+        }
+        else {
+            var colors = ['grey', 'yellow', 'darkblue', 'grey', 'darkgrey', 'purple', 'white', 'black'];
+            color = colors[item.condition];
+        }
+        var day = 'day';
+        if (item.day === 2) {
+            day = 'night';
+        }
+        L.polygon(item.coords, {'color': color}).addTo(overlays.Weather);
+        L.imageOverlay('/static/monocle-icons/assets/weather_' + item.condition + '_' + day + '.png', [item.coords[0], item.coords[2]]).addTo(overlays.Weather);
+    });
+}
+
 function addScanAreaToMap (data, map) {
     data.forEach(function (item) {
         if (item.type === 'scanarea'){
@@ -471,6 +493,16 @@ function getPokestops() {
     });
 }
 
+function getWeather() {
+    new Promise(function (resolve, reject) {
+        $.get('/weather', function (response) {
+            resolve(response);
+        });
+    }).then(function (data) {
+        addWeatherToMap(data, map);
+    });
+}
+
 function getScanAreaCoords() {
     new Promise(function (resolve, reject) {
         $.get('/scan_coords', function (response) {
@@ -520,6 +552,9 @@ map.whenReady(function () {
     overlays.Pokestops.once('add', function(e) {
         getPokestops();
     })
+    overlays.Weather.once('add', function(e) {
+        getWeather();
+    })
     getScanAreaCoords();
     overlays.Workers.once('add', function(e) {
         getWorkers();
@@ -529,6 +564,7 @@ map.whenReady(function () {
     setInterval(getPokemon, 30000);
     setInterval(getRaids, 60000)
     setInterval(getGyms, 110000)
+    setInterval(getWeather, 300000)
 });
 
 $("#settings>ul.nav>li>a").on('click', function(){

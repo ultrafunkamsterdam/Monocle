@@ -11,7 +11,7 @@ from aiopogo.auth_ptc import AuthPtc
 from cyrandom import choice, randint, uniform
 from pogeo import get_distance
 
-from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE
+from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE, WEATHER_CACHE
 from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point
 from .shared import get_logger, LOOP, SessionManager, run_threaded, ACCOUNTS
 from . import altitudes, avatar, bounds, db_proc, spawns, sanitized as conf
@@ -866,6 +866,12 @@ class Worker:
                 except KeyError:
                     pass
 
+        if map_objects.client_weather:
+            for w in map_objects.client_weather:
+                weather = self.normalize_weather(w, map_objects.time_of_day)
+                if weather not in WEATHER_CACHE:
+                    db_proc.add(weather)
+
         if spawn_id:
             db_proc.add({
                 'type': 'target',
@@ -1334,6 +1340,24 @@ class Worker:
             'external_id': raw.id,
             'lat': raw.latitude,
             'lon': raw.longitude
+        }
+
+    @staticmethod
+    def normalize_weather(raw, time_of_day):
+        alert_severity = 0
+        warn = False
+        if raw.alerts:
+            for a in raw.alerts:
+                warn = warn or a.warn_weather
+                if a.severity > alert_severity:
+                    alert_severity = a.severity
+        return {
+            'type': 'weather',
+            's2_cell_id': raw.s2_cell_id,
+            'condition': raw.gameplay_weather.gameplay_condition,
+            'alert_severity': alert_severity,
+            'warn': warn,
+            'day': time_of_day
         }
 
     @staticmethod
