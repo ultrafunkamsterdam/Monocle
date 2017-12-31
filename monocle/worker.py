@@ -224,8 +224,7 @@ class Worker:
 
     async def download_remote_config(self, version):
         request = self.api.create_request()
-        # to be added : device_model=account['model']
-        request.download_remote_config_version(platform=1, app_version=version)
+        request.download_remote_config_version(platform=1, device_model=self.account['model'], app_version=version)
         responses = await self.call(request, buddy=False, inbox=False, dl_hash=False)
 
         try:
@@ -279,9 +278,9 @@ class Worker:
         self.log.info('Starting RPC login sequence (iOS app simulation)')
 
         # empty request
-        request = self.api.create_request()
-        await self.call(request, chain=False)
-        await self.random_sleep(.43, .97)
+        # request = self.api.create_request()
+        # await self.call(request, chain=False)
+        # await self.random_sleep(.43, .97)
 
         # request 1: get_player
         tutorial_state = await self.get_player()
