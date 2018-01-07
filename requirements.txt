@@ -8,3 +8,4 @@ aiohttp>=2.1,<2.3
 pogeo==0.3.*
 cyrandom>=0.1.2
 s2sphere>=0.2.5
+overpy>=0.4

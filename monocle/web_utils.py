@@ -5,10 +5,13 @@ from time import time
 
 from monocle import sanitized as conf
 from monocle.db import get_forts, Pokestop, session_scope, Sighting, Spawnpoint, Raid, Fort, FortSighting, Weather
-from monocle.utils import Units, get_address
+from monocle.utils import Units, get_address, dump_pickle, load_pickle
 from monocle.names import DAMAGE, MOVES, POKEMON
+from monocle.bounds import north, south, east, west
 
 import s2sphere
+import overpy
+from shapely.geometry import Polygon, Point
 
 if conf.MAP_WORKERS:
     try:
@@ -246,4 +249,42 @@ def sighting_to_report_marker(sighting):
         'lat': sighting.lat,
         'lon': sighting.lon,
     }
+
+def get_all_parks():
+    parks = []
+    try:
+        parks = load_pickle('parks', raise_exception=True)
+    except (FileNotFoundError, TypeError, KeyError):
+        # all osm parks at 10/07/2016
+        api = overpy.Overpass()
+        request = '[timeout:620][date:"2016-07-10T00:00:00Z"];(way["leisure"="park"];way["landuse"="recreation_ground"];way["leisure"="recreation_ground"];way["leisure"="pitch"];way["leisure"="garden"];way["leisure"="golf_course"];way["leisure"="playground"];way["landuse"="meadow"];way["landuse"="grass"];way["landuse"="greenfield"];way["natural"="scrub"];);out;>;out skel qt;'
+        request = '[bbox:{},{},{},{}]{}'.format(south, west, north, east, request)
+        response = api.query(request)
+        for w in response.ways:
+            parks.append({
+                'type': 'park',
+                'coords': [[float(c.lat), float(c.lon)] for c in w.nodes]
+            })
+        dump_pickle('parks', parks)
+    
+    return parks
+
+def get_s2_cells(level=12):
+    region_covered = s2sphere.LatLngRect.from_point_pair(
+        s2sphere.LatLng.from_degrees(north, west),
+        s2sphere.LatLng.from_degrees(south, east)
+    )
+    coverer = s2sphere.RegionCoverer()
+    coverer.min_level = level
+    coverer.max_level = level
+    coverer.max_cells = 50
+    covering = coverer.get_covering(region_covered)
+    markers = []
+    for cellid in covering:
+        cell = s2sphere.Cell(cellid)
+        markers.append({
+            'id': 'cell-' + str(cellid.id()),
+            'coords': [(get_vertex(cell, v)) for v in range(0, 4)]
+        })
+    return markers
 
