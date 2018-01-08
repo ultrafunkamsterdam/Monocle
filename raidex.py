@@ -16,7 +16,7 @@ from monocle import db, sanitized as conf
 from monocle.web_utils import *
 from monocle.bounds import area, center
 
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point, LineString
 
 
 app = Flask(__name__, template_folder=resource_filename('monocle', 'templates'), static_folder=resource_filename('monocle', 'static'))
@@ -40,8 +40,13 @@ def gym_data():
     parks = get_all_parks()
     for g in get_gym_markers():
         for p in parks:
-            if Polygon(p['coords']).contains(Point(g['lat'], g['lon'])):
-                gyms.append(g)
+            coords = p['coords']
+            if len(coords) == 2:
+                if LineString(coords).within(Point(g['lat'], g['lon'])):
+                    gyms.append(g)
+            else if len(coords) > 2:
+                if Polygon(coords).contains(Point(g['lat'], g['lon'])):
+                    gyms.append(g)
     return jsonify(gyms)
 
 @app.route('/parks')
