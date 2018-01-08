@@ -44,7 +44,7 @@ def gym_data():
             if len(coords) == 2:
                 if LineString(coords).within(Point(g['lat'], g['lon'])):
                     gyms.append(g)
-            else if len(coords) > 2:
+            elif len(coords) > 2:
                 if Polygon(coords).contains(Point(g['lat'], g['lon'])):
                     gyms.append(g)
     return jsonify(gyms)
