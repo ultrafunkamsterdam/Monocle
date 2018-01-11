@@ -10,6 +10,7 @@ var markers = {};
 var overlays = {
     Gyms: L.layerGroup([]),
     Parks: L.layerGroup([]),
+    ParksCells: L.layerGroup([]),
     Cells: L.layerGroup([]),
     ScanArea: L.layerGroup([])
 };
@@ -66,6 +67,12 @@ function addParksToMap (data, map) {
     });
 }
 
+function addParksCellsToMap (data, map) {
+    data.forEach(function (item) {
+        L.polygon(item.coords, {'color': 'grey'}).addTo(overlays.ParksCells);
+    });
+}
+
 function addCellsToMap (data, map) {
     data.forEach(function (item) {
         L.polygon(item.coords, {'color': 'grey'}).addTo(overlays.Cells);
@@ -105,6 +112,19 @@ function getParks() {
         });
     }).then(function (data) {
         addParksToMap(data, map);
+    });
+}
+
+function getParksCells() {
+    if (overlays.Cells.hidden) {
+        return;
+    }
+    new Promise(function (resolve, reject) {
+        $.get('/parks_cells', function (response) {
+            resolve(response);
+        });
+    }).then(function (data) {
+        addParksCellsToMap(data, map);
     });
 }
 
@@ -152,6 +172,9 @@ map.whenReady(function () {
     })
     overlays.Cells.once('add', function(e) {
         getCells();
+    })
+    overlays.ParksCells.once('add', function(e) {
+        getParksCells();
     })
     getScanAreaCoords();
 });

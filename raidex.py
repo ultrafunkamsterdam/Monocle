@@ -17,7 +17,7 @@ from monocle.web_utils import *
 from monocle.bounds import area, center
 
 from shapely.geometry import Polygon, Point, LineString
-
+import s2sphere
 
 app = Flask(__name__, template_folder=resource_filename('monocle', 'templates'), static_folder=resource_filename('monocle', 'static'))
 
@@ -39,15 +39,39 @@ def gym_data():
     gyms = []
     parks = get_all_parks()
     for g in get_gym_markers():
+        gym_point = Point(g['lat'], g['lon'])
+        cell = Polygon(get_s2_cell_as_polygon(g['lat'], g['lon'], 20)) # s2 lvl 20
         for p in parks:
             coords = p['coords']
+            # osm polygon can be a line
             if len(coords) == 2:
-                if LineString(coords).within(Point(g['lat'], g['lon'])):
+                shape = LineString(coords)
+                if shape.within(gym_point) or cell.intersects(shape):
                     gyms.append(g)
-            elif len(coords) > 2:
-                if Polygon(coords).contains(Point(g['lat'], g['lon'])):
+                    break
+            if len(coords) > 2:
+                shape = Polygon(coords)
+                if shape.contains(gym_point) or cell.intersects(shape):
                     gyms.append(g)
+                    break
     return jsonify(gyms)
+
+@app.route('/parks_cells')
+def parks_cells():
+    markers = []
+    parks = get_all_parks()
+    for g in get_gym_markers():
+        gym_point = Point(g['lat'], g['lon'])
+        cell = Polygon(get_s2_cell_as_polygon(g['lat'], g['lon'], 20)) # s2 lvl 20
+        for p in parks:
+            coords = p['coords']
+            if len(coords) > 2:
+                shape = Polygon(coords)
+                if shape.contains(gym_point) or cell.intersects(shape):
+                    bounds = shape.bounds
+                    markers += get_s2_cells(bounds[0], bounds[1], bounds[2], bounds[3], 20)
+                    break
+    return jsonify(markers)
 
 @app.route('/parks')
 def parks():
@@ -55,7 +79,7 @@ def parks():
 
 @app.route('/cells')
 def cells():
-    return jsonify(get_s2_cells())
+    return jsonify(get_s2_cells(level=12))
 
 @app.route('/scan_coords')
 def scan_coords():

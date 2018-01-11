@@ -269,10 +269,10 @@ def get_all_parks():
     
     return parks
 
-def get_s2_cells(level=12):
+def get_s2_cells(n=north, w=west, s=south, e=east, level=12):
     region_covered = s2sphere.LatLngRect.from_point_pair(
-        s2sphere.LatLng.from_degrees(north, west),
-        s2sphere.LatLng.from_degrees(south, east)
+        s2sphere.LatLng.from_degrees(n, w),
+        s2sphere.LatLng.from_degrees(s, e)
     )
     coverer = s2sphere.RegionCoverer()
     coverer.min_level = level
@@ -287,4 +287,8 @@ def get_s2_cells(level=12):
             'coords': [(get_vertex(cell, v)) for v in range(0, 4)]
         })
     return markers
+
+def get_s2_cell_as_polygon(lat, lon, level=12):
+    cell = s2sphere.Cell(s2sphere.CellId.from_lat_lng(s2sphere.LatLng.from_degrees(lat, lon)).parent(level))
+    return [(get_vertex(cell, v)) for v in range(0, 4)]
 
