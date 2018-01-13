@@ -257,7 +257,7 @@ def get_all_parks():
     except (FileNotFoundError, TypeError, KeyError):
         # all osm parks at 10/07/2016
         api = overpy.Overpass()
-        request = '[timeout:620][date:"2016-07-10T00:00:00Z"];(way["leisure"="park"];way["landuse"="recreation_ground"];way["leisure"="recreation_ground"];way["leisure"="pitch"];way["leisure"="garden"];way["leisure"="golf_course"];way["leisure"="playground"];way["landuse"="meadow"];way["landuse"="grass"];way["landuse"="greenfield"];way["natural"="scrub"];);out;>;out skel qt;'
+        request = '[timeout:620][date:"2016-07-17T00:00:00Z"];(way["leisure"="park"];way["landuse"="recreation_ground"];way["leisure"="recreation_ground"];way["leisure"="pitch"];way["leisure"="garden"];way["leisure"="golf_course"];way["leisure"="playground"];way["landuse"="meadow"];way["landuse"="grass"];way["landuse"="greenfield"];way["natural"="scrub"];way["natural"="heath"];way["natural"="grassland"];way["landuse"="farmyard"];way["landuse"="vineyard"];);out;>;out skel qt;'
         request = '[bbox:{},{},{},{}]{}'.format(south, west, north, east, request)
         response = api.query(request)
         for w in response.ways:
