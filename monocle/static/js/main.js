@@ -234,7 +234,7 @@ function FortMarker (raw) {
                        '<br>Slots occupied: '+ (6 - raw.slots_available) + '/6' +
                        '<br>Guarding Pokemon: ' + raw.pokemon_name + ' (#' + raw.pokemon_id + ')';
         }
-        content += '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ raw.lat + ','+ raw.lon +' target="_blank" title="See in Google Maps">Get directions</a>';
+        content += '<br>=&gt; <a href="https://www.google.com/maps/?daddr='+ raw.lat + ','+ raw.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
         event.popup.setContent(content);
     });
     marker.bindPopup();
@@ -380,7 +380,7 @@ function addSpawnsToMap (data, map) {
         circle.bindPopup('<b>Spawn ' + item.spawn_id + '</b>' +
                          '<br/>despawn: ' + time +
                          '<br/>duration: '+ (item.duration == null ? '30mn' : item.duration + 'mn') +
-                         '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +' target="_blank" title="See in Google Maps">Get directions</a>');
+                         '<br>=&gt; <a href="https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>');
         circle.addTo(overlays.Spawns);
     });
 }
@@ -391,7 +391,7 @@ function addPokestopsToMap (data, map) {
         var marker = L.marker([item.lat, item.lon], {icon: icon});
         marker.raw = item;
         marker.bindPopup('<b>Pokestop: ' + item.external_id + '</b>' +
-                         '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +' target="_blank" title="See in Google Maps">Get directions</a>');
+                         '<br>=&gt; <a href="https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>');
         marker.addTo(overlays.Pokestops);
     });
 }
@@ -668,37 +668,31 @@ function populateSettingsPanels(){
     var container = $('.settings-panel[data-panel="filters"]').children('.panel-body');
     var newHtml = '';
     for (var i = 1; i <= _pokemon_count; i++){
-        var partHtml = `<div class="text-center">
-                <img src="static/monocle-icons/icons/`+i+`.png">
-                <div class="btn-group" role="group" data-group="filter-`+i+`">
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="pokemon">Pokémon</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="trash">Trash</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="hidden">Hide</button>
-                </div>
-            </div>
-        `;
-
+        var partHtml = '<div class="text-center">' +
+                         '<img src="static/monocle-icons/icons/'+i+'.png">' +
+                         '<div class="btn-group" role="group" data-group="filter-'+i+'">' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="pokemon">Pokémon</button>' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="trash">Trash</button>' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="hidden">Hide</button>' +
+                         '</div>' +
+                       '</div>';
         newHtml += partHtml
     }
-    newHtml += '</div>';
     container.html(newHtml);
 
     // Raids
     container = $('.settings-panel[data-panel="raids"]').children('.panel-body');
     newHtml = '';
     for (var i = 1; i <= _raids_count; i++){
-        var partHtml = `<div class="text-center">
-                <span class="raid-label">Level ` + i + ` (` + _raids_labels[i-1] + `)` + `</span>
-                <div class="btn-group" role="group" data-group="raids-`+i+`">
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="show">Show</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="hide">Hide</button>
-                </div>
-            </div>
-        `;
-
+        var partHtml = '<div class="text-center">' +
+                          '<span class="raid-label">Level ' + i + ' (' + _raids_labels[i-1] + ')</span>' +
+                          '<div class="btn-group" role="group" data-group="raids-'+i+'">' +
+                            '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="show">Show</button>' +
+                            '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="hide">Hide</button>' +
+                          '</div>' +
+                        '</div>';
         newHtml += partHtml
     }
-    newHtml += '</div>';
     container.html(newHtml);
 }
 
