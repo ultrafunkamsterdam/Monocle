@@ -878,7 +878,7 @@ class Worker:
                 'spawn_id': spawn_id})
 
         if (conf.INCUBATE_EGGS and self.unused_incubators
-                and self.eggs and self.smart_throttle()):
+                and self.eggs and (not conf.SMART_THROTTLE or self.smart_throttle(1))):
             await self.incubate_eggs()
 
         if pokemon_seen > 0:
