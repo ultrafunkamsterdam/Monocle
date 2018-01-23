@@ -166,7 +166,7 @@ def get_weather():
         weathers = session.query(Weather)
         markers = []
         for weather in weathers:
-            cell = s2sphere.Cell(s2sphere.CellId(weather.s2_cell_id))
+            cell = s2sphere.Cell(s2sphere.CellId(weather.s2_cell_id).parent(10))
             center = s2sphere.LatLng.from_point(cell.get_center())
             markers.append({
                 'id': 'weather-' + str(weather.id),
