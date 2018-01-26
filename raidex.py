@@ -46,12 +46,12 @@ def gym_data():
             # osm polygon can be a line
             if len(coords) == 2:
                 shape = LineString(coords)
-                if shape.within(gym_point) or shape.within(cell.centroid):
+                if shape.within(cell.centroid):
                     gyms.append(g)
                     break
             if len(coords) > 2:
                 shape = Polygon(coords)
-                if shape.contains(gym_point) or shape.contains(cell.centroid):
+                if shape.contains(cell.centroid):
                     gyms.append(g)
                     break
     return jsonify(gyms)
