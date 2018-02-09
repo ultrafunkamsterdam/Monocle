@@ -611,9 +611,15 @@ class Worker:
             else:
                 if (not dl_hash
                         and conf.FORCED_KILL
+<<<<<<< HEAD
                         and dl_settings.settings.minimum_client_version != '0.91.0'):
                     forced_version = StrictVersion(dl_settings.settings.minimum_client_version)
                     if forced_version > StrictVersion('0.91.0'):
+=======
+                        and dl_settings.settings.minimum_client_version != '0.89.1'):
+                    forced_version = StrictVersion(dl_settings.settings.minimum_client_version)
+                    if forced_version > StrictVersion('0.89.1'):
+>>>>>>> e9f8164e9dbb9f7467577149b0a3b64a88c89378
                         err = '{} is being forced, exiting.'.format(forced_version)
                         self.log.error(err)
                         print(err)
@@ -975,11 +981,18 @@ class Worker:
     async def spin_pokestop(self, pokestop):
         self.error_code = 'S'
         pokestop_location = pokestop.latitude, pokestop.longitude
+<<<<<<< HEAD
         name = pokestop_location
         
         # randomize location up to ~1.5 meters
         self.simulate_jitter(amount=0.00001)
 
+=======
+
+        # randomize location up to ~1.5 meters
+        self.simulate_jitter(amount=0.00001)
+        
+>>>>>>> e9f8164e9dbb9f7467577149b0a3b64a88c89378
         distance = get_distance(self.location, pokestop_location)
         # permitted interaction distance - 4 (for some jitter leeway)
         # estimation of spinning speed limit
@@ -987,6 +1000,16 @@ class Worker:
             self.error_code = '!'
             return False
 
+<<<<<<< HEAD
+=======
+        request = self.api.create_request()
+        request.fort_details(fort_id = pokestop.id,
+                             latitude = pokestop_location[0],
+                             longitude = pokestop_location[1])
+        responses = await self.call(request, action=1.2)
+        name = responses['FORT_DETAILS'].name
+
+>>>>>>> e9f8164e9dbb9f7467577149b0a3b64a88c89378
         request = self.api.create_request()
         request.fort_search(fort_id = pokestop.id,
                             player_latitude = self.location[0],
@@ -1503,6 +1526,24 @@ class Worker:
             'modifier': 0,
         }
         
+
+    @staticmethod
+    def normalize_weather(raw, time_of_day):
+        alert_severity = 0
+        warn = False
+        if raw.alerts:
+            for a in raw.alerts:
+                warn = warn or a.warn_weather
+                if a.severity > alert_severity:
+                    alert_severity = a.severity
+        return {
+            'type': 'weather',
+            's2_cell_id': raw.s2_cell_id,
+            'condition': raw.gameplay_weather.gameplay_condition,
+            'alert_severity': alert_severity,
+            'warn': warn,
+            'day': time_of_day
+        }
 
     @staticmethod
     def normalize_weather(raw, time_of_day):

@@ -349,6 +349,17 @@ class Weather(Base):
     day = Column(TINY_TYPE)
 
 
+class Weather(Base):
+    __tablename__ = 'weather'
+
+    id = Column(Integer, primary_key=True)
+    s2_cell_id = Column(BigInteger)
+    condition = Column(TINY_TYPE)
+    alert_severity = Column(TINY_TYPE)
+    warn = Column(Boolean)
+    day = Column(TINY_TYPE)
+
+
 class Mystery(Base):
     __tablename__ = 'mystery_sightings'
 
@@ -688,6 +699,29 @@ def add_pokestop(session, raw_pokestop):
             session.commit()
             return
     
+
+def add_weather(session, raw_weather):
+    s2_cell_id = raw_weather['s2_cell_id']
+
+    weather = session.query(Weather) \
+        .filter(Weather.s2_cell_id == s2_cell_id) \
+        .first()
+    if not weather:
+        weather = Weather(
+            s2_cell_id=s2_cell_id,
+            condition=raw_weather['condition'],
+            alert_severity=raw_weather['alert_severity'],
+            warn=raw_weather['warn'],
+            day=raw_weather['day']
+        )
+        session.add(weather)
+    else:
+        weather.condition = raw_weather['condition']
+        weather.alert_severity = raw_weather['alert_severity']
+        weather.warn = raw_weather['warn']
+        weather.day = raw_weather['day']
+    WEATHER_CACHE.add(raw_weather)
+
 
 def add_weather(session, raw_weather):
     s2_cell_id = raw_weather['s2_cell_id']
