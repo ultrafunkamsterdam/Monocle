@@ -67,6 +67,7 @@ var overlays = {
     Raids: L.layerGroup([]),
     Gyms: L.layerGroup([]),
     Pokestops: L.layerGroup([]),
+    Weather: L.layerGroup([]),
     Workers: L.layerGroup([]),
     Spawns: L.layerGroup([]),
     ScanArea: L.layerGroup([])
@@ -90,6 +91,7 @@ monitor(overlays.Pokemon, false)
 monitor(overlays.Trash, true)
 monitor(overlays.Raids, true)
 monitor(overlays.Gyms, true)
+monitor(overlays.Weather, true)
 monitor(overlays.Workers, true)
 
 function getPopupContent (item) {
@@ -121,7 +123,7 @@ function getPopupContent (item) {
     }else{
         content += '<a href="#" data-pokeid="'+item.pokemon_id+'" data-newlayer="Trash" class="popup_filter_link">Move to Trash</a>';
     }
-    content += '<br>=&gt; <a href="https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
+    content += '<br>=&gt; <a href="https://www.google.com/maps/dir/?api=1&destination='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
     return content;
 }
 
@@ -142,7 +144,7 @@ function getRaidPopupContent (raw) {
     	var seconds = parseInt(diff - (minutes * 60));
 		content += 'Raid End: ' + minutes + 'm ' + seconds + 's<br>';
 	}
-    content += '<br>=&gt; <a href="https://www.google.com/maps/?daddr='+ raw.lat + ','+ raw.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
+    content += '<br>=&gt; <a href="https://www.google.com/maps/dir/?api=1&destination='+ raw.lat + ','+ raw.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
     return content;
 }
 
@@ -232,7 +234,7 @@ function FortMarker (raw) {
                        '<br>Slots occupied: '+ (6 - raw.slots_available) + '/6' +
                        '<br>Guarding Pokemon: ' + raw.pokemon_name + ' (#' + raw.pokemon_id + ')';
         }
-        content += '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ raw.lat + ','+ raw.lon +' target="_blank" title="See in Google Maps">Get directions</a>';
+        content += '<br>=&gt; <a href="https://www.google.com/maps/dir/?api=1&destination='+ raw.lat + ','+ raw.lon +'" target="_blank" title="See in Google Maps">Get directions</a>';
         event.popup.setContent(content);
     });
     marker.bindPopup();
@@ -378,7 +380,7 @@ function addSpawnsToMap (data, map) {
         circle.bindPopup('<b>Spawn ' + item.spawn_id + '</b>' +
                          '<br/>despawn: ' + time +
                          '<br/>duration: '+ (item.duration == null ? '30mn' : item.duration + 'mn') +
-                         '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +' target="_blank" title="See in Google Maps">Get directions</a>');
+                         '<br>=&gt; <a href="https://www.google.com/maps/dir/?api=1&destination='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>');
         circle.addTo(overlays.Spawns);
     });
 }
@@ -389,8 +391,28 @@ function addPokestopsToMap (data, map) {
         var marker = L.marker([item.lat, item.lon], {icon: icon});
         marker.raw = item;
         marker.bindPopup('<b>Pokestop: ' + item.external_id + '</b>' +
-                         '<br>=&gt; <a href=https://www.google.com/maps/?daddr='+ item.lat + ','+ item.lon +' target="_blank" title="See in Google Maps">Get directions</a>');
+                         '<br>=&gt; <a href="https://www.google.com/maps/dir/?api=1&destination='+ item.lat + ','+ item.lon +'" target="_blank" title="See in Google Maps">Get directions</a>');
         marker.addTo(overlays.Pokestops);
+    });
+}
+
+function addWeatherToMap (data, map) {
+    overlays.Weather.clearLayers();
+    data.forEach(function (item) {
+        var color = 'grey';
+        if (item.alert_severity > 0) {
+            color = 'red';
+        }
+        else {
+            var colors = ['grey', 'yellow', 'darkblue', 'grey', 'darkgrey', 'purple', 'white', 'black'];
+            color = colors[item.condition];
+        }
+        var day = 'day';
+        if (item.day === 2) {
+            day = 'night';
+        }
+        L.polygon(item.coords, {'color': color}).addTo(overlays.Weather);
+        L.imageOverlay('/static/monocle-icons/assets/weather_' + item.condition + '_' + day + '.png', [item.coords[0], item.coords[2]]).addTo(overlays.Weather);
     });
 }
 
@@ -471,6 +493,16 @@ function getPokestops() {
     });
 }
 
+function getWeather() {
+    new Promise(function (resolve, reject) {
+        $.get('/weather', function (response) {
+            resolve(response);
+        });
+    }).then(function (data) {
+        addWeatherToMap(data, map);
+    });
+}
+
 function getScanAreaCoords() {
     new Promise(function (resolve, reject) {
         $.get('/scan_coords', function (response) {
@@ -520,6 +552,9 @@ map.whenReady(function () {
     overlays.Pokestops.once('add', function(e) {
         getPokestops();
     })
+    overlays.Weather.once('add', function(e) {
+        getWeather();
+    })
     getScanAreaCoords();
     overlays.Workers.once('add', function(e) {
         getWorkers();
@@ -529,6 +564,7 @@ map.whenReady(function () {
     setInterval(getPokemon, 30000);
     setInterval(getRaids, 60000)
     setInterval(getGyms, 110000)
+    setInterval(getWeather, 300000)
 });
 
 $("#settings>ul.nav>li>a").on('click', function(){
@@ -565,7 +601,7 @@ $('#reset_btn').on('click', function () {
 $('body').on('click', '.popup_filter_link', function () {
     var id = $(this).data("pokeid");
     var layer = $(this).data("newlayer").toLowerCase();
-    moveToLayer(id, layer);
+    moveToLayer(id, layer, 'filter');
     var item = $("#settings button[data-id='"+id+"']");
     item.removeClass("active").filter("[data-value='"+layer+"']").addClass("active");
 });
@@ -632,37 +668,31 @@ function populateSettingsPanels(){
     var container = $('.settings-panel[data-panel="filters"]').children('.panel-body');
     var newHtml = '';
     for (var i = 1; i <= _pokemon_count; i++){
-        var partHtml = `<div class="text-center">
-                <img src="static/monocle-icons/icons/`+i+`.png">
-                <div class="btn-group" role="group" data-group="filter-`+i+`">
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="pokemon">Pokémon</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="trash">Trash</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="hidden">Hide</button>
-                </div>
-            </div>
-        `;
-
+        var partHtml = '<div class="text-center">' +
+                         '<img src="static/monocle-icons/icons/'+i+'.png">' +
+                         '<div class="btn-group" role="group" data-group="filter-'+i+'">' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="pokemon">Pokémon</button>' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="trash">Trash</button>' +
+                           '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="hidden">Hide</button>' +
+                         '</div>' +
+                       '</div>';
         newHtml += partHtml
     }
-    newHtml += '</div>';
     container.html(newHtml);
 
     // Raids
     container = $('.settings-panel[data-panel="raids"]').children('.panel-body');
     newHtml = '';
     for (var i = 1; i <= _raids_count; i++){
-        var partHtml = `<div class="text-center">
-                <span class="raid-label">Level ` + i + ` (` + _raids_labels[i-1] + `)` + `</span>
-                <div class="btn-group" role="group" data-group="raids-`+i+`">
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="show">Show</button>
-                  <button type="button" class="btn btn-default" data-id="`+i+`" data-value="hide">Hide</button>
-                </div>
-            </div>
-        `;
-
+        var partHtml = '<div class="text-center">' +
+                          '<span class="raid-label">Level ' + i + ' (' + _raids_labels[i-1] + ')</span>' +
+                          '<div class="btn-group" role="group" data-group="raids-'+i+'">' +
+                            '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="show">Show</button>' +
+                            '<button type="button" class="btn btn-default" data-id="'+i+'" data-value="hide">Hide</button>' +
+                          '</div>' +
+                        '</div>';
         newHtml += partHtml
     }
-    newHtml += '</div>';
     container.html(newHtml);
 }
 

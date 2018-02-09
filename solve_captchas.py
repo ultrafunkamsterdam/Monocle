@@ -100,7 +100,7 @@ async def main():
 
                 await sleep(.6)
 
-                request.download_remote_config_version(platform=1, app_version=7904)
+                request.download_remote_config_version(platform=1, app_version=9100)
                 request.check_challenge()
                 request.get_hatched_eggs()
                 request.get_inventory(last_timestamp_ms=account.get('inventory_timestamp', 0))
@@ -118,6 +118,7 @@ async def main():
                     print('No CAPTCHA was pending on {}.'.format(username))
                     extra_queue.put(account)
                 else:
+                    print('Trying to solve {}.'.format(username))
                     if await solve_captcha(challenge_url, api, driver, timestamp):
                         account['time'] = time()
                         account['captcha'] = False

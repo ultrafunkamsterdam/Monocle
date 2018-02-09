@@ -4,9 +4,14 @@ from multiprocessing.managers import BaseManager, RemoteError
 from time import time
 
 from monocle import sanitized as conf
-from monocle.db import get_forts, Pokestop, session_scope, Sighting, Spawnpoint, Raid, Fort, FortSighting
-from monocle.utils import Units, get_address
+from monocle.db import get_forts, Pokestop, session_scope, Sighting, Spawnpoint, Raid, Fort, FortSighting, Weather
+from monocle.utils import Units, get_address, dump_pickle, load_pickle
 from monocle.names import DAMAGE, MOVES, POKEMON
+from monocle.bounds import north, south, east, west
+
+import s2sphere
+import overpy
+from shapely.geometry import Polygon, Point
 
 if conf.MAP_WORKERS:
     try:
@@ -151,21 +156,47 @@ def get_raid_markers(names=POKEMON, moves=MOVES):
         return markers
 
 
+def get_vertex(cell, v):
+    vertex = s2sphere.LatLng.from_point(cell.get_vertex(v))
+
+    return (vertex.lat().degrees, vertex.lng().degrees)
+
+def get_weather():
+    with session_scope() as session:
+        weathers = session.query(Weather)
+        markers = []
+        for weather in weathers:
+            cell = s2sphere.Cell(s2sphere.CellId(weather.s2_cell_id).parent(10))
+            center = s2sphere.LatLng.from_point(cell.get_center())
+            markers.append({
+                'id': 'weather-' + str(weather.id),
+                'coords': [(get_vertex(cell, v)) for v in range(0, 4)],
+                'center': (center.lat().degrees, center.lng().degrees),
+                'condition': weather.condition,
+                'alert_severity': weather.alert_severity,
+                'warn': weather.warn,
+                'day': weather.day
+            })
+        return markers
+
+
 def get_gym_markers(names=POKEMON):
     with session_scope() as session:
         forts = get_forts(session)
-    return [{
-            'id': 'fort-' + str(fort['fort_id']),
-            'sighting_id': fort['id'],
-            'prestige': fort['prestige'],
-            'pokemon_id': fort['guard_pokemon_id'],
-            'pokemon_name': names[fort['guard_pokemon_id']],
-            'team': fort['team'],
-            'lat': fort['lat'],
-            'lon': fort['lon'],
-            'slots_available': fort['slots_available'],
-            'last_modified': fort['last_modified']
-    } for fort in forts]
+        return [{
+                'id': 'fort-' + str(fort['fort_id']),
+                'sighting_id': fort['id'],
+                'occupied_seconds': fort['occupied_seconds'],
+                'image_url': fort['image_url'],
+                'name': fort['name'],
+                'pokemon_id': fort['guard_pokemon_id'],
+                'pokemon_name': names[fort['guard_pokemon_id']],
+                'team': fort['team'],
+                'lat': fort['lat'],
+                'lon': fort['lon'],
+                'slots_available': fort['slots_available'],
+                'last_modified': fort['last_modified']
+        } for fort in forts]
 
 
 def get_spawnpoint_markers():
@@ -220,4 +251,46 @@ def sighting_to_report_marker(sighting):
         'lat': sighting.lat,
         'lon': sighting.lon,
     }
+
+def get_all_parks():
+    parks = []
+    try:
+        parks = load_pickle('parks', raise_exception=True)
+    except (FileNotFoundError, TypeError, KeyError):
+        # all osm parks at 10/07/2016
+        api = overpy.Overpass()
+        request = '[timeout:620][date:"2016-07-17T00:00:00Z"];(way["leisure"="park"];way["landuse"="recreation_ground"];way["leisure"="recreation_ground"];way["leisure"="pitch"];way["leisure"="garden"];way["leisure"="golf_course"];way["leisure"="playground"];way["landuse"="meadow"];way["landuse"="grass"];way["landuse"="greenfield"];way["natural"="scrub"];way["natural"="heath"];way["natural"="grassland"];way["landuse"="farmyard"];way["landuse"="vineyard"];way["natural"="plateau"];way["leisure"="nature_reserve"];way["natural"="moor"];way["landuse"="farmland"];way["landuse"="orchard"];);out;>;out skel qt;'
+        request = '[bbox:{},{},{},{}]{}'.format(south, west, north, east, request)
+        response = api.query(request)
+        for w in response.ways:
+            parks.append({
+                'type': 'park',
+                'coords': [[float(c.lat), float(c.lon)] for c in w.nodes]
+            })
+        dump_pickle('parks', parks)
+    
+    return parks
+
+def get_s2_cells(n=north, w=west, s=south, e=east, level=12):
+    region_covered = s2sphere.LatLngRect.from_point_pair(
+        s2sphere.LatLng.from_degrees(n, w),
+        s2sphere.LatLng.from_degrees(s, e)
+    )
+    coverer = s2sphere.RegionCoverer()
+    coverer.min_level = level
+    coverer.max_level = level
+    coverer.max_cells = 50
+    covering = coverer.get_covering(region_covered)
+    markers = []
+    for cellid in covering:
+        cell = s2sphere.Cell(cellid)
+        markers.append({
+            'id': 'cell-' + str(cellid.id()),
+            'coords': [(get_vertex(cell, v)) for v in range(0, 4)]
+        })
+    return markers
+
+def get_s2_cell_as_polygon(lat, lon, level=12):
+    cell = s2sphere.Cell(s2sphere.CellId.from_lat_lng(s2sphere.LatLng.from_degrees(lat, lon)).parent(level))
+    return [(get_vertex(cell, v)) for v in range(0, 4)]
 

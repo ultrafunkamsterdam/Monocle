@@ -1,17 +1,16 @@
 from asyncio import gather, Lock, Semaphore, sleep, CancelledError
-from collections import deque, Counter
+from collections import deque
 from time import time, monotonic
 from queue import Empty
 from itertools import cycle
 from sys import exit
 from distutils.version import StrictVersion
-import pprint
 from aiopogo import PGoApi, HashServer, json_loads, exceptions as ex
 from aiopogo.auth_ptc import AuthPtc
 from cyrandom import choice, randint, uniform
 from pogeo import get_distance
 
-from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE
+from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE, WEATHER_CACHE
 from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point
 from .shared import get_logger, LOOP, SessionManager, run_threaded, ACCOUNTS
 from . import altitudes, avatar, bounds, db_proc, spawns, sanitized as conf
@@ -187,7 +186,7 @@ class Worker:
             raise err
 
         self.error_code = '°'
-        version = 7904
+        version = 9100
         async with self.sim_semaphore:
             self.error_code = 'APP SIMULATION'
             if conf.APP_SIMULATION:
@@ -226,8 +225,8 @@ class Worker:
 
     async def download_remote_config(self, version):
         request = self.api.create_request()
-        request.download_remote_config_version(platform=1, app_version=version)
-        responses = await self.call(request, buddy=False, settings=True, inbox=False, dl_hash=False)
+        request.download_remote_config_version(platform=1, device_model=self.account['model'], app_version=version)
+        responses = await self.call(request, buddy=False, inbox=False, dl_hash=False)
 
         try:
             inventory_items = responses['GET_INVENTORY'].inventory_delta.inventory_items
@@ -280,9 +279,9 @@ class Worker:
         self.log.info('Starting RPC login sequence (iOS app simulation)')
 
         # empty request
-        request = self.api.create_request()
-        await self.call(request, chain=False)
-        await self.random_sleep(.43, .97)
+        # request = self.api.create_request()
+        # await self.call(request, chain=False)
+        # await self.random_sleep(.43, .97)
 
         # request 1: get_player
         tutorial_state = await self.get_player()
@@ -305,7 +304,7 @@ class Worker:
                     paginate=True,
                     page_offset=page_offset,
                     page_timestamp=page_timestamp)
-                responses = await self.call(request, buddy=False, settings=True, inbox=False)
+                responses = await self.call(request, buddy=False, inbox=False)
                 if i > 2:
                     await sleep(1.45)
                     i = 0
@@ -333,7 +332,7 @@ class Worker:
                     paginate=True,
                     page_offset=page_offset,
                     page_timestamp=page_timestamp)
-                responses = await self.call(request, buddy=False, settings=True, inbox=False)
+                responses = await self.call(request, buddy=False, inbox=False)
                 if i > 2:
                     await sleep(1.5)
                     i = 0
@@ -359,14 +358,14 @@ class Worker:
             # request 5: get_player_profile
             request = self.api.create_request()
             request.get_player_profile()
-            await self.call(request, settings=True, inbox=False)
+            await self.call(request, inbox=False)
             await self.random_sleep(.2, .3)
 
             if self.player_level:
                 # request 6: level_up_rewards
                 request = self.api.create_request()
                 request.level_up_rewards(level=self.player_level)
-                await self.call(request, settings=True)
+                await self.call(request)
                 await self.random_sleep(.45, .7)
             else:
                 self.log.warning('No player level')
@@ -476,7 +475,7 @@ class Worker:
                 if conf.LURE_POKESTOPS:
                     if 501 in self.items:
                         if self.items[501] > 0:
-                            self.log.info('received a lure module!')
+                            self.log.info('I got a lure module!')
 
             elif conf.INCUBATE_EGGS:
                 if obj.HasField('pokemon_data') and obj.pokemon_data.is_egg:
@@ -492,8 +491,7 @@ class Worker:
                         else:
                             self.unused_incubators.appendleft(item)
 
-
-    async def call(self, request, chain=True, buddy=True, settings=False, inbox=True, dl_hash=True, action=None):
+    async def call(self, request, chain=True, buddy=True, settings=True, inbox=True, dl_hash=True, action=None):
         if chain:
             request.check_challenge()
             request.get_hatched_eggs()
@@ -613,9 +611,9 @@ class Worker:
             else:
                 if (not dl_hash
                         and conf.FORCED_KILL
-                        and dl_settings.settings.minimum_client_version != '0.79.4'):
+                        and dl_settings.settings.minimum_client_version != '0.91.0'):
                     forced_version = StrictVersion(dl_settings.settings.minimum_client_version)
-                    if forced_version > StrictVersion('0.79.4'):
+                    if forced_version > StrictVersion('0.91.0'):
                         err = '{} is being forced, exiting.'.format(forced_version)
                         self.log.error(err)
                         print(err)
@@ -756,7 +754,7 @@ class Worker:
             encounter_conf=conf.ENCOUNTER, notify_conf=conf.NOTIFY,
             more_points=conf.MORE_POINTS, catch_conf=conf.CATCH_POKEMON):
         self.handle.cancel()
-        self.error_code = '∞' if bootstrap else '!'
+        self.error_code = 'B' if bootstrap else 'V'
 
         self.log.info('Visiting {0[0]:.4f},{0[1]:.4f}', point)
         start = time()
@@ -799,6 +797,7 @@ class Worker:
             await self.clean_bag()
 
         for map_cell in map_objects.map_cells:
+
             request_time_ms = map_cell.current_timestamp_ms
             for pokemon in map_cell.wild_pokemons:
                 pokemon_seen += 1
@@ -807,7 +806,7 @@ class Worker:
                 seen_target = seen_target or normalized['spawn_id'] == spawn_id
 
                 if (normalized not in SIGHTING_CACHE and normalized not in MYSTERY_CACHE):
-                     
+
                     if ((encounter_conf == 'all' or 
                         (encounter_conf == 'some' and 
                         normalized['pokemon_id'] in conf.ENCOUNTER_IDS)) 
@@ -861,18 +860,41 @@ class Worker:
                         cooldown = fort.cooldown_complete_timestamp_ms
                         if not cooldown or time() > cooldown / 1000:
                             await self.spin_pokestop(fort)
+
                     if conf.LURE_POKESTOPS and 501 in self.items:
                         if self.items[501] > 0:
                             if ((fort.latitude, fort.longitude) < max(conf.LURE_BOUNDS)
                             and (fort.latitude, fort.longitude) > min(conf.LURE_BOUNDS)):
                                 await self.lure_pokestop(fort)
+
+
+                    if hasattr(fort, 'active_fort_modifier'):
+                        pokestop = self.normalize_pokestop(fort)
+                        pokestop['modifier'] = fort.active_fort_modifier.pop() if len(fort.active_fort_modifier) >= 1 else 0
+                        if pokestop['modifier'] != 0:
+                            pokestop_location = pokestop['lat'], pokestop['lon']
+                            self.log.info('Found a pokestop with a {} lure module! {}'.format(pokestop['modifier'], pokestop_location))
+                            db_proc.add(pokestop)
+                            break
+
                     if fort.id not in FORT_CACHE.pokestops:
                         pokestop = self.normalize_pokestop(fort)
                         db_proc.add(pokestop)
 
+
+
                 else:
+
                     if fort not in FORT_CACHE:
-                        db_proc.add(self.normalize_gym(fort))
+                        gym = self.normalize_gym(fort)
+                        if fort.HasField('gym_display'):
+                            gym["total_gym_cp"] = fort.gym_display.total_gym_cp
+                            gym["occupied_seconds"] = fort.gym_display.occupied_millis // 1000
+                            gym["lowest_pokemon_motivation"] = fort.gym_display.lowest_pokemon_motivation if hasattr(fort.gym_display, 'lowest_pokemon_motivation') else 0
+                        gym["image_url"] = fort.image_url if hasattr(fort, 'image_url') else ""
+                        gym["name"] = fort.name if hasattr(fort, 'name') else ""
+                        db_proc.add(gym)
+
                     if fort.HasField('raid_info'):
                         if fort not in RAID_CACHE:
                             if conf.NOTIFY_RAIDS:
@@ -891,6 +913,12 @@ class Worker:
                 except KeyError:
                     pass
 
+        if map_objects.client_weather:
+            for w in map_objects.client_weather:
+                weather = self.normalize_weather(w, map_objects.time_of_day)
+                if weather not in WEATHER_CACHE:
+                    db_proc.add(weather)
+
         if spawn_id:
             db_proc.add({
                 'type': 'target',
@@ -898,7 +926,7 @@ class Worker:
                 'spawn_id': spawn_id})
 
         if (conf.INCUBATE_EGGS and self.unused_incubators
-                and self.eggs and self.smart_throttle()):
+                and self.eggs and (not conf.SMART_THROTTLE or self.smart_throttle(1))):
             await self.incubate_eggs()
 
         if pokemon_seen > 0:
@@ -945,24 +973,27 @@ class Worker:
             return False
 
     async def spin_pokestop(self, pokestop):
-        self.error_code = '$'
+        self.error_code = 'S'
         pokestop_location = pokestop.latitude, pokestop.longitude
-        distance = get_distance(self.location, pokestop_location)
+        name = pokestop_location
+        
+        # randomize location up to ~1.5 meters
+        self.simulate_jitter(amount=0.00001)
 
+        distance = get_distance(self.location, pokestop_location)
+        # permitted interaction distance - 4 (for some jitter leeway)
+        # estimation of spinning speed limit
         if distance > 36 or self.speed > SPINNING_SPEED_LIMIT:
             self.error_code = '!'
             return False
 
-        self.simulate_jitter(amount=0.00001)
-
-        name = pokestop_location
         request = self.api.create_request()
         request.fort_search(fort_id = pokestop.id,
                             player_latitude = self.location[0],
                             player_longitude = self.location[1],
                             fort_latitude = pokestop_location[0],
                             fort_longitude = pokestop_location[1])
-        responses = await self.call(request, action=2)
+        responses = await self.call(request, action=1.8)
 
         try:
             result = responses['FORT_SEARCH'].result
@@ -970,7 +1001,7 @@ class Worker:
             self.log.warning('Invalid Pokéstop spinning response.')
             self.error_code = '!'
             return
-        
+
         if result == 1:
             self.log.info('Spun {}.', name)
             try:
@@ -1008,40 +1039,45 @@ class Worker:
 
 
     async def lure_pokestop(self, pokestop):
-        self.error_code = '+'
+        self.error_code = 'F'
         pokestop_location = pokestop.latitude, pokestop.longitude
         distance = get_distance(self.location, pokestop_location)
         if distance > 36 or self.speed > SPINNING_SPEED_LIMIT:
             self.error_code = '!'
-            return False
+            return
         self.simulate_jitter(amount=0.00001)
         self.log.info('Trying to lure {}'.format(pokestop_location))
+
         request = self.api.create_request()
         request.add_fort_modifier(modifier_type=501, fort_id=pokestop.id, player_latitude=self.location[0], player_longitude=self.location[1])
+
         responses = await self.call(request, action=2)
+
         try:
             result = responses['ADD_FORT_MODIFIER'].result
-            if result == 0:
-                self.log.info('no response from server while placing lure module')
-            if result == 1:
-                pp('lure module placed on {}'.format(pokestop.location))
-                x = self.inventory.index(501)
-                inventory.pop(x)
-                return
-            if result == 2:
-                self.log.info('{} already has a lure module attached'.format(pokestop_location))
-            if result == 3: 
-                self.log.info('{} too far away to place lure module'.format(pokestop_location))
-            if result == 4:
-                self.log.info('while trying to place a lure on {}, i found out do\'t have any modules'.format(pokestop_location))
-            if result == 5:
-                self.log.info('pokestop currently closed, so cannot place lure module' )
-            self.error_code = '+'    
-        except:
-            self.log.warning('invalid add_fort_modifier response at pokestop {}'.format(pokestop_location))
+        except KeyError:
+            self.log.warning('Invalid Pokestop luring response.')
             self.error_code = '!'
             return
-        
+
+        if result == 1:
+            self.log.info('Lure module succesfully deployed on {}'.format(pokestop_location))
+            self.error_code = 'Y'
+            return
+        elif result == 2:
+            self.log.info('{} already has a lure module attached'.format(pokestop_location))
+        elif result == 3:
+            distance = get_distance(self.location, pokestop_location)
+            self.log.info('Fort {} is too far away ({}m) to place lure module'.format(pokestop_location, distance))
+        elif result == 4:
+            self.log.info('Damn, out of Lure modules while trying to lure {}'.format(pokestop_location))
+        elif result == 5:
+            self.log.info('Pokestop currently closed, so cannot place lure module' )
+        else:
+            self.log.info('Unknown response from server on attempt to place Lure Module')
+
+        self.error_code = 'f'
+        return
 
     async def encounter(self, pokemon, spawn_id):
         distance_to_pokemon = get_distance(self.location, (pokemon['lat'], pokemon['lon']))
@@ -1071,15 +1107,25 @@ class Worker:
         responses = await self.call(request, action=2.25)
 
         try:
-            pdata = responses['ENCOUNTER'].wild_pokemon.pokemon_data
-            pokemon['move_1'] = pdata.move_1
-            pokemon['move_2'] = pdata.move_2
-            pokemon['individual_attack'] = pdata.individual_attack
-            pokemon['individual_defense'] = pdata.individual_defense
-            pokemon['individual_stamina'] = pdata.individual_stamina
-            pokemon['height'] = pdata.height_m
-            pokemon['weight'] = pdata.weight_kg
-            pokemon['gender'] = pdata.pokemon_display.gender
+            result = responses['ENCOUNTER'].status
+            if result == 1:
+                pdata = responses['ENCOUNTER'].wild_pokemon.pokemon_data
+                pokemon['move_1'] = pdata.move_1
+                pokemon['move_2'] = pdata.move_2
+                pokemon['individual_attack'] = pdata.individual_attack
+                pokemon['individual_defense'] = pdata.individual_defense
+                pokemon['individual_stamina'] = pdata.individual_stamina
+                pokemon['height'] = pdata.height_m
+                pokemon['weight'] = pdata.weight_kg
+                pokemon['gender'] = pdata.pokemon_display.gender
+            elif result == 4:
+                self.log.info('Pokemon that should be encountered has fled')
+            elif result == 7:
+                self.log.warning('Could not encounter #{} because the bag of {} is full.',
+                        pokemon['pokemon_id'], self.username)
+                await self.swap_account(reason='full pkmn bag')
+            else:
+                self.log.error('Failed encountering #{}: {}', pokemon['pokemon_id'], result)
         except KeyError:
             self.log.error('Missing encounter response.')
         self.error_code = '!'
@@ -1088,7 +1134,7 @@ class Worker:
     async def catch_pokemon(self, pokemon, spawn_id):
         distance_to_pokemon = get_distance(self.location, (pokemon['lat'], pokemon['lon']))
         self.error_code = 'q'
-        
+
         if distance_to_pokemon > 48:
             percent = 1 - (47 / distance_to_pokemon)
             lat_change = (self.location[0] - pokemon['lat']) * percent
@@ -1107,7 +1153,7 @@ class Worker:
         self.log.info('Trying to catch {} ( {} m )'.format(POKEMON[pokemon['pokemon_id']], round(distance_to_pokemon)))
 
         request = self.api.create_request()
-        normalized_recticle_size = round(uniform(1.60, 1.99), 2)
+        normalized_recticle_size = round(uniform(1.88, 1.99), 2)
 
         request.catch_pokemon(encounter_id=pokemon['encounter_id'],
                               pokeball=1,
@@ -1120,22 +1166,24 @@ class Worker:
         responses = await self.call(request, action=2.25)
         try:
             cresult = responses['CATCH_POKEMON'].status
-            self.error_code = 'Q'
-            if cresult == 0 :
-                self.log.info('Oh no! An error 0 occured while catching {}'.format(POKEMON[pokemon['pokemon_id']]))
-            if cresult == 1 :
-                self.log.info('YES! caught a wild {}'.format(POKEMON[pokemon['pokemon_id']]))
-            if cresult == 2 :
-                self.log.info('Oh no! {} escaped!'.format(POKEMON[pokemon['pokemon_id']]))
-            if cresult == 3 :
-                self.log.info('Oh no! {} fled!'.format(POKEMON[pokemon['pokemon_id']]))
-            if cresult == 4 :
-                self.log.info('Oh no! Missed throw to catch {}'.format(POKEMON[pokemon['pokemon_id']]))
-            self.error_code = '!'
         except KeyError:
-            self.log.error('Missing catch response.')
-        self.error_code = '!'
+            self.log.warning('No valid status response on Catch attempt')
+            self.error_code = '!'
+            return
 
+        if cresult == 1 :
+            self.log.info('YES! caught a wild {}'.format(POKEMON[pokemon['pokemon_id']]))
+        elif cresult == 2 :
+            self.log.info('Oh no! {} escaped!'.format(POKEMON[pokemon['pokemon_id']]))
+        elif cresult == 3 :
+            self.log.info('Oh no! {} fled!'.format(POKEMON[pokemon['pokemon_id']]))
+        elif cresult == 4 :
+            self.log.info('Oh no! Missed throw to catch {}'.format(POKEMON[pokemon['pokemon_id']]))
+        else:
+            self.log.info('Unknown response from server while catching {}'.format(POKEMON[pokemon['pokemon_id']]))
+
+        self.error_code = 'q'
+        return
 
     async def clean_bag(self):
         self.error_code = '|'
@@ -1262,7 +1310,7 @@ class Worker:
 
     def simulate_jitter(self, amount=0.00002):
         '''Slightly randomize location, by up to ~3 meters by default.'''
-        self.location = randomize_point(self.location)
+        self.location = randomize_point(self.location, amount=amount)
         self.altitude = uniform(self.altitude - 1, self.altitude + 1)
         self.api.set_position(*self.location, self.altitude)
 
@@ -1349,9 +1397,7 @@ class Worker:
         self.num_captchas = 0
         self.eggs = {}
         self.unused_incubators = deque()
-        self.inventory = []
         self.initialize_api()
-
         self.error_code = None
 
     def unset_code(self):
@@ -1412,28 +1458,40 @@ class Worker:
             'lat': raw.latitude,
             'lon': raw.longitude,
             'team': raw.owned_by_team,
-            'prestige': raw.gym_points,
             'guard_pokemon_id': raw.guard_pokemon_id,
             'last_modified': raw.last_modified_timestamp_ms // 1000,
-            'slots_available': raw.gym_display.slots_available
+            'slots_available': raw.gym_display.slots_available,
+            # 'occupied_seconds': raw.gym_display.occupied_millis // 1000,
+            # 'total_gym_cp' : raw.gym_display.total_gym_cp,
+            # 'lowest_pokemon_motivation' : raw.gym_display.lowest_pokemon_motivation,
         }
 
     @staticmethod
     def normalize_raid(raw):
-        return {
+        obj = {
             'type': 'raid',
             'external_id': raw.raid_info.raid_seed,
             'fort_external_id': raw.id,
             'lat': raw.latitude,
             'lon': raw.longitude,
             'level': raw.raid_info.raid_level,
-            'pokemon_id': raw.raid_info.raid_pokemon.pokemon_id if raw.raid_info.raid_pokemon else 0,
-            'move_1': raw.raid_info.raid_pokemon.move_1 if raw.raid_info.raid_pokemon else 0,
-            'move_2': raw.raid_info.raid_pokemon.move_2 if raw.raid_info.raid_pokemon else 0,
             'time_spawn': raw.raid_info.raid_spawn_ms // 1000,
             'time_battle': raw.raid_info.raid_battle_ms // 1000,
-            'time_end': raw.raid_info.raid_end_ms // 1000
+            'time_end': raw.raid_info.raid_end_ms // 1000,
+            'pokemon_id': 0,
+            'cp': 0,
+            'move_1': 0,
+            'move_2': 0
         }
+
+        if raw.raid_info.HasField('raid_pokemon'):
+            obj['pokemon_id'] = raw.raid_info.raid_pokemon.pokemon_id
+            obj['cp'] = raw.raid_info.raid_pokemon.cp
+            obj['move_1'] = raw.raid_info.raid_pokemon.move_1
+            obj['move_2'] = raw.raid_info.raid_pokemon.move_2
+
+        return obj
+
 
     @staticmethod
     def normalize_pokestop(raw):
@@ -1441,7 +1499,27 @@ class Worker:
             'type': 'pokestop',
             'external_id': raw.id,
             'lat': raw.latitude,
-            'lon': raw.longitude
+            'lon': raw.longitude,
+            'modifier': 0,
+        }
+        
+
+    @staticmethod
+    def normalize_weather(raw, time_of_day):
+        alert_severity = 0
+        warn = False
+        if raw.alerts:
+            for a in raw.alerts:
+                warn = warn or a.warn_weather
+                if a.severity > alert_severity:
+                    alert_severity = a.severity
+        return {
+            'type': 'weather',
+            's2_cell_id': raw.s2_cell_id,
+            'condition': raw.gameplay_weather.gameplay_condition,
+            'alert_severity': alert_severity,
+            'warn': warn,
+            'day': time_of_day
         }
 
     @staticmethod

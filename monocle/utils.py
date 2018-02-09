@@ -148,7 +148,6 @@ def get_device_info(account):
 
 
 def generate_device_info(account):
-
     ios9 = ('9.0', '9.0.1', '9.0.2', '9.1', '9.2', '9.2.1', '9.3', '9.3.1', '9.3.2', '9.3.3', '9.3.4', '9.3.5')
     ios10 = ('10.0.1', '10.0.2', '10.0.3', '10.1', '10.1.1', '10.2', '10.2.1', '10.3', '10.3.1', '10.3.2', '10.3.3')
     ios11 = ('11.0.1', '11.0.2', '11.0.3', '11.1', '11.1.1', '11.1.2')
@@ -165,7 +164,7 @@ def generate_device_info(account):
         account['iOS'] = choice(ios10 + ios11)
 
     else:
-        account['iOS'] = choice(ios10 + ios11)
+        account['iOS'] = choice(ios9 + ios10)
 
     return account
 

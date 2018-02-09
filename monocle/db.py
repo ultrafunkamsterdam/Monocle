@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from enum import Enum
 from time import time, mktime
 
-from sqlalchemy import Column, Integer, String, Float, SmallInteger, BigInteger, ForeignKey, UniqueConstraint, create_engine, cast, func, desc, asc, and_, exists
+from sqlalchemy import Column, Integer, String, Float, Boolean, SmallInteger, BigInteger, ForeignKey, UniqueConstraint, create_engine, cast, func, desc, asc, and_, exists
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.types import TypeDecorator, Numeric, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -242,10 +242,43 @@ class FortCache:
             pass
 
 
+class WeatherCache:
+    """Simple cache for storing actual weathers
+
+    It's used in order not to make as many queries to the database.
+    It schedules raids to be removed as soon as they expire.
+    """
+    def __init__(self):
+        self.store = {}
+
+    def __len__(self):
+        return len(self.store)
+
+    def add(self, weather):
+        self.store[weather['s2_cell_id']] = weather
+
+    def remove(self, cache_id):
+        try:
+            del self.store[cache_id]
+        except KeyError:
+            pass
+
+    def __contains__(self, raw_weather):
+        try:
+            weather = self.store[raw_weather['s2_cell_id']]
+            return (weather['condition'] == raw_weather['condition'] and
+                weather['alert_severity'] == raw_weather['alert_severity'] and
+                weather['warn'] == raw_weather['warn'] and
+                weather['day'] == raw_weather['day'])
+        except KeyError:
+            return False
+
+
 SIGHTING_CACHE = SightingCache()
 MYSTERY_CACHE = MysteryCache()
 FORT_CACHE = FortCache()
 RAID_CACHE = RaidCache()
+WEATHER_CACHE = WeatherCache()
 
 Base = declarative_base()
 
@@ -277,6 +310,8 @@ class Sighting(Base):
     move_1 = Column(SmallInteger)
     move_2 = Column(SmallInteger)
     display = Column(SmallInteger)
+    cp = Column(Integer)
+    level = Column(SmallInteger)
 
     __table_args__ = (
         UniqueConstraint(
@@ -300,6 +335,18 @@ class Raid(Base):
     time_spawn = Column(Integer, index=True)
     time_battle = Column(Integer)
     time_end = Column(Integer)
+    cp = Column(Integer)
+
+
+class Weather(Base):
+    __tablename__ = 'weather'
+
+    id = Column(Integer, primary_key=True)
+    s2_cell_id = Column(BigInteger)
+    condition = Column(TINY_TYPE)
+    alert_severity = Column(TINY_TYPE)
+    warn = Column(Boolean)
+    day = Column(TINY_TYPE)
 
 
 class Mystery(Base):
@@ -320,7 +367,8 @@ class Mystery(Base):
     sta_iv = Column(TINY_TYPE)
     move_1 = Column(SmallInteger)
     move_2 = Column(SmallInteger)
-
+    cp = Column(Integer)
+    level = Column(SmallInteger)
     __table_args__ = (
         UniqueConstraint(
             'encounter_id',
@@ -371,9 +419,13 @@ class FortSighting(Base):
     fort_id = Column(Integer, ForeignKey('forts.id'))
     last_modified = Column(Integer, index=True)
     team = Column(TINY_TYPE)
-    prestige = Column(MEDIUM_TYPE)
     guard_pokemon_id = Column(SmallInteger)
     slots_available = Column(Integer)
+    occupied_seconds = Column(Integer)
+    total_gym_cp = Column(Integer)
+    lowest_pokemon_motivation = Column(Integer)
+    name = Column(String(128))
+    image_url = Column(String(256))
 
     __table_args__ = (
         UniqueConstraint(
@@ -391,7 +443,7 @@ class Pokestop(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE, index=True)
     lon = Column(FLOAT_TYPE, index=True)
-
+    modifier = Column(Integer)
 
 @contextmanager
 def session_scope(autoflush=False):
@@ -553,13 +605,19 @@ def add_fort_sighting(session, raw_fort):
         # Why is it not in the cache? It should be there!
         FORT_CACHE.add(raw_fort)
         return
+
     obj = FortSighting(
         fort=fort,
         team=raw_fort['team'],
-        prestige=raw_fort['prestige'],
         guard_pokemon_id=raw_fort['guard_pokemon_id'],
         last_modified=raw_fort['last_modified'],
-        slots_available=raw_fort['slots_available']
+        slots_available=raw_fort['slots_available'],
+        occupied_seconds=raw_fort['occupied_seconds'],
+        total_gym_cp=raw_fort['total_gym_cp'],
+        lowest_pokemon_motivation=raw_fort['lowest_pokemon_motivation'],
+        name=raw_fort['name'],
+        image_url=raw_fort['image_url']
+
     )
     session.add(obj)
     FORT_CACHE.add(raw_fort)
@@ -585,6 +643,7 @@ def add_raid(session, raw_raid):
             raid.pokemon_id = raw_raid['pokemon_id']
             raid.move_1 = raw_raid['move_1']
             raid.move_2 = raw_raid['move_2']
+            raid.cp = raw_raid['cp']
         # Why is it not in the cache? It should be there!
         RAID_CACHE.add(raw_raid)
         return
@@ -596,6 +655,7 @@ def add_raid(session, raw_raid):
         pokemon_id=raw_raid['pokemon_id'],
         move_1=raw_raid['move_1'],
         move_2=raw_raid['move_2'],
+        cp=raw_raid['cp'],
         time_spawn=raw_raid['time_spawn'],
         time_battle=raw_raid['time_battle'],
         time_end=raw_raid['time_end']
@@ -606,24 +666,58 @@ def add_raid(session, raw_raid):
 
 def add_pokestop(session, raw_pokestop):
     pokestop_id = raw_pokestop['external_id']
-    if session.query(exists().where(
-            Pokestop.external_id == pokestop_id)).scalar():
+    modifier = raw_pokestop['modifier']
+    
+    pokestop = session.query(Pokestop) \
+            .filter(Pokestop.external_id == pokestop_id) \
+            .first()
+            
+    if pokestop is None:
+        pokestop = Pokestop(
+            external_id=pokestop_id,
+            lat=raw_pokestop['lat'],
+            lon=raw_pokestop['lon'],
+            modifier=raw_pokestop['modifier'],
+        )
+        session.add(pokestop)
         FORT_CACHE.pokestops.add(pokestop_id)
-        return
+        
+    else:
+        if pokestop.modifier != modifier:
+            pokestop.modifier = modifier
+            session.commit()
+            return
+    
 
-    pokestop = Pokestop(
-        external_id=pokestop_id,
-        lat=raw_pokestop['lat'],
-        lon=raw_pokestop['lon']
-    )
-    session.add(pokestop)
-    FORT_CACHE.pokestops.add(pokestop_id)
+def add_weather(session, raw_weather):
+    s2_cell_id = raw_weather['s2_cell_id']
+
+    weather = session.query(Weather) \
+        .filter(Weather.s2_cell_id == s2_cell_id) \
+        .first()
+    if not weather:
+        weather = Weather(
+            s2_cell_id=s2_cell_id,
+            condition=raw_weather['condition'],
+            alert_severity=raw_weather['alert_severity'],
+            warn=raw_weather['warn'],
+            day=raw_weather['day']
+        )
+        session.add(weather)
+    else:
+        weather.condition = raw_weather['condition']
+        weather.alert_severity = raw_weather['alert_severity']
+        weather.warn = raw_weather['warn']
+        weather.day = raw_weather['day']
+    WEATHER_CACHE.add(raw_weather)
 
 
 def update_failures(session, spawn_id, success, allowed=conf.FAILURES_ALLOWED):
     spawnpoint = session.query(Spawnpoint) \
         .filter(Spawnpoint.spawn_id == spawn_id) \
         .first()
+    if not hasattr(spawnpoint, 'failures'):
+        pass
     try:
         if success:
             spawnpoint.failures = 0
@@ -686,23 +780,22 @@ def _get_forts_sqlite(session):
 
 def _get_forts(session):
     return session.execute('''
-        SELECT
-            fs.fort_id,
-            fs.id,
-            fs.team,
-            fs.prestige,
-            fs.guard_pokemon_id,
-            fs.last_modified,
-            f.lat,
-            f.lon,
-            fs.slots_available
-        FROM fort_sightings fs
-        JOIN forts f ON f.id=fs.fort_id
-        WHERE (fs.fort_id, fs.last_modified) IN (
-            SELECT fort_id, MAX(last_modified)
-            FROM fort_sightings
-            GROUP BY fort_id
-        )
+SELECT
+fs.fort_id,
+fs.id,
+fs.team,
+fs.guard_pokemon_id,
+fs.last_modified,
+f.lat,
+f.lon,
+fs.slots_available,
+fs.image_url,
+fs.name,
+fs.occupied_seconds
+FROM fort_sightings fs
+JOIN forts f ON f.id=fs.fort_id
+WHERE (fs.fort_id, fs.last_modified) IN (SELECT fort_id, MAX(last_modified) FROM fort_sightings
+GROUP BY fort_id)
     ''').fetchall()
 
 get_forts = _get_forts_sqlite if DB_TYPE == 'sqlite' else _get_forts

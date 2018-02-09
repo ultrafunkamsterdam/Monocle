@@ -90,6 +90,11 @@ def get_raids():
     return jsonify(get_raid_markers())
 
 
+@app.route('/weather')
+def weather():
+    return jsonify(get_weather())
+
+
 @app.route('/gym_data')
 def gym_data():
     return jsonify(get_gym_markers())

@@ -89,7 +89,7 @@ The gyms statistics server is in a separate file, because it's intended to be sh
 
 ## Getting Started Tips & FAQs
 
-Visit our [Wiki](https://github.com/Noctem/Monocle/wiki) for more info.
+Visit our [Wiki](https://github.com/ZeChrales/Monocle/wiki) for more info.
 
 ## License
 

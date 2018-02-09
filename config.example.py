@@ -107,12 +107,16 @@ SPIN_COOLDOWN = 90    # spin only one PokéStop every n seconds (default 300)
 LURE_POKESTOPS = True # this wil only work when accounts of level > 8 are used or when they become level 8 while running (they get a TROY_DISK at level 8)
 LURE_BOUNDS = None    # Tuple of Tuples 
 # correct is for example : LURE_BOUNDS = ( (52.3339656238097, 4.895439147949219), (52.246396621314084, 4.898185729980469), (52.24870881820424, 4.610137939453125), (52.3406783967721, 4.6163177490234375) )
-
+# to get a correct bounds value. find a rocketmap somewhere. hit f12 for developer options. Zoom map until it fits your area.
+# copy pase this command into the developer options console :
+# var b = map.getBounds()
+# b.toString()
+# copy the tuple.
 
 # Catching Pokemon
 CATCH_POKEMON = True  # set to False to disable
-CATCH_COOLDOWN = 60   # spin only one PokéStop every n seconds (default 60)
-CATCH_STOP_LEVEL = 9  # stop catching if worker passed this level (default = 9)
+CATCH_COOLDOWN = 60   # catch only pokemon every n seconds (and when eligiable ofcourse according list below) (default 60)
+CATCH_STOP_LEVEL = 9  # stop catching if worker passed this level (default = 9) ( = gettomg lure module and lures your town )
 
 # Select Pokemon eligiable for catching. Don't put to many garbage id's in here, as it will eat your hashes like cookies
 CATCH_IDS = ( 41, 3, 6, 9, 24, 26, 28, 30, 31, 34, 35, 36, 38, 40, 44, 45, 51, 56, 57, 59, 62, 65, 67, 68, 71, 75, 76, 78, 80, 85, 89, 91, 94, 103, 105, 106, 107, 108, 110, 112, 113, 114, 115, 123, 125, 127, 128, 130, 131, 132, 134, 135, 136, 137, 138, 139, 140, 141, 142, 144, 145, 146, 147, 148, 149, 150, 151, 153, 154, 157, 159, 160, 175, 176, 179, 180, 181, 182, 186, 189, 192, 193, 196, 197, 199, 201, 205, 208, 210, 212, 214, 215, 217, 219, 222, 225, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251 )
