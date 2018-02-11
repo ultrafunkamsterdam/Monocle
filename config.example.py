@@ -104,7 +104,7 @@ ENCOUNTER = None
 # PokéStops
 SPIN_POKESTOPS = True  # spin all PokéStops that are within range
 SPIN_COOLDOWN = 300    # spin only one PokéStop every n seconds (default 300)
-LURE_EXPIRATION = 1800 # lure duration (default 30mn)
+LURE_DURATION = 1800 # lure duration (default 30mn)
 
 # minimum number of each item to keep if the bag is cleaned
 # bag cleaning is disabled if this is not present or is commented out
