@@ -459,7 +459,7 @@ class Pokestop(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE, index=True)
     lon = Column(FLOAT_TYPE, index=True)
-    lure_start = Column(MEDIUM_TYPE)
+    lure_start = Column(Integer)
 
 
 @contextmanager
