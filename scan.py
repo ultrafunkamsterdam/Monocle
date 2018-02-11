@@ -27,7 +27,7 @@ from monocle.shared import LOOP, get_logger, SessionManager, ACCOUNTS
 from monocle.utils import get_address, dump_pickle
 from monocle.worker import Worker
 from monocle.overseer import Overseer
-from monocle.db import FORT_CACHE, RAID_CACHE
+from monocle.db import GYM_CACHE, RAID_CACHE
 from monocle import altitudes, db_proc, spawns
 
 
@@ -150,8 +150,7 @@ def cleanup(overseer, manager):
 
         print('Dumping pickles...')
         dump_pickle('accounts', ACCOUNTS)
-        FORT_CACHE.pickle()
-        RAID_CACHE.preload()
+        GYM_CACHE.pickle()
         altitudes.pickle()
         if conf.CACHE_CELLS:
             dump_pickle('cells', Worker.cells)
