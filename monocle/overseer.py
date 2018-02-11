@@ -10,7 +10,7 @@ from time import time, monotonic
 from aiopogo import HashServer
 from sqlalchemy.exc import OperationalError
 
-from .db import SIGHTING_CACHE, MYSTERY_CACHE
+from .db import SIGHTING_CACHE, MYSTERY_CACHE, POKESTOP_CACHE, RAID_CACHE, GYM_CACHE
 from .utils import get_current_hour, dump_pickle, get_start_coords, get_bootstrap_points, randomize_point, best_factors, percentage_split
 from .shared import get_logger, LOOP, run_threaded, ACCOUNTS
 from . import bounds, db_proc, spawns, sanitized as conf
@@ -165,18 +165,17 @@ class Overseer:
             self.extra_queue.qsize(), self.captcha_queue.qsize()
         )
 
-        self.sighting_cache_size = len(SIGHTING_CACHE.store)
-        self.mystery_cache_size = len(MYSTERY_CACHE.store)
-
         self.update_coroutines_count()
         self.counts = (
             'Known spawns: {}, unknown: {}, more: {}\n'
             '{} workers, {} coroutines\n'
             'sightings cache: {}, mystery cache: {}, DB queue: {}\n'
+            'pokestops cache: {}, gyms cache: {}, raids cache: {}\n'
         ).format(
             len(spawns), len(spawns.unknown), spawns.cells_count,
             count, self.coroutines_count,
-            len(SIGHTING_CACHE), len(MYSTERY_CACHE), len(db_proc)
+            len(SIGHTING_CACHE), len(MYSTERY_CACHE), len(db_proc),
+            len(POKESTOP_CACHE), len(GYM_CACHE), len(RAID_CACHE)
         )
         LOOP.call_later(refresh, self.update_stats)
 

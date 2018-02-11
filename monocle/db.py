@@ -202,14 +202,37 @@ class RaidCache:
                 r['fort_external_id'] = fort.external_id
                 r['time_end'] = raid.time_end
                 r['pokemon_id'] = raid.pokemon_id
-                self.add(r)
+                self.store[r['fort_external_id']] = r
 
 
-class FortCache:
+class PokestopCache:
+    """Simple cache for storing pokestops"""
+    def __init__(self):
+        self.store = {}
+
+    def __len__(self):
+        return len(self.store)
+
+    def add(self, pokestop):
+        self.store[pokestop['external_id']] = pokestop
+
+    def __contains__(self, pokestop):
+        if pokestop.id in self.store:
+            p = self.store[pokestop.id]
+            if (p['lat'] == pokestop.latitude and
+                p['lon'] == pokestop.longitude):
+                if 501 in pokestop.active_fort_modifier: #501 is the code for lure
+                    lure_start = pokestop.last_modified_timestamp_ms // 1000
+                    return p['lure_start'] == lure_start
+                else:
+                    return True
+        return False
+
+
+class GymCache:
     """Simple cache for storing fort sightings"""
     def __init__(self):
         self.gyms = {}
-        self.pokestops = set()
         self.class_version = 2
         self.unpickle()
 
@@ -276,7 +299,8 @@ class WeatherCache:
 
 SIGHTING_CACHE = SightingCache()
 MYSTERY_CACHE = MysteryCache()
-FORT_CACHE = FortCache()
+POKESTOP_CACHE = PokestopCache()
+GYM_CACHE = GymCache()
 RAID_CACHE = RaidCache()
 WEATHER_CACHE = WeatherCache()
 
@@ -435,6 +459,7 @@ class Pokestop(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE, index=True)
     lon = Column(FLOAT_TYPE, index=True)
+    lure_start = Column(MEDIUM_TYPE)
 
 
 @contextmanager
@@ -595,7 +620,7 @@ def add_fort_sighting(session, raw_fort):
                 FortSighting.last_modified == raw_fort['last_modified']
             ))).scalar():
         # Why is it not in the cache? It should be there!
-        FORT_CACHE.add(raw_fort)
+        GYM_CACHE.add(raw_fort)
         return
     obj = FortSighting(
         fort=fort,
@@ -606,7 +631,7 @@ def add_fort_sighting(session, raw_fort):
         slots_available=raw_fort['slots_available']
     )
     session.add(obj)
-    FORT_CACHE.add(raw_fort)
+    GYM_CACHE.add(raw_fort)
 
 
 def add_raid(session, raw_raid):
@@ -650,18 +675,25 @@ def add_raid(session, raw_raid):
 
 def add_pokestop(session, raw_pokestop):
     pokestop_id = raw_pokestop['external_id']
-    if session.query(exists().where(
-            Pokestop.external_id == pokestop_id)).scalar():
-        FORT_CACHE.pokestops.add(pokestop_id)
+    pokestop = session.query(Pokestop) \
+        .filter(Pokestop.external_id == pokestop_id) \
+        .first()
+    if pokestop:
+        pokestop.lat = raw_pokestop['lat']
+        pokestop.lon = raw_pokestop['lon']
+        pokestop.lure_start = raw_pokestop['lure_start']
+        # Why is it not in the cache? It should be there!
+        POKESTOP_CACHE.add(raw_pokestop)
         return
 
     pokestop = Pokestop(
         external_id=pokestop_id,
         lat=raw_pokestop['lat'],
-        lon=raw_pokestop['lon']
+        lon=raw_pokestop['lon'],
+        lure_start=raw_pokestop['lure_start']
     )
     session.add(pokestop)
-    FORT_CACHE.pokestops.add(pokestop_id)
+    POKESTOP_CACHE.add(raw_pokestop)
 
 
 def add_weather(session, raw_weather):

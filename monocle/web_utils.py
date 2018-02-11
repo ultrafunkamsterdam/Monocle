@@ -239,7 +239,8 @@ def get_pokestop_markers():
         return [{
             'external_id': pokestop.external_id,
             'lat': pokestop.lat,
-            'lon': pokestop.lon
+            'lon': pokestop.lon,
+            'lure_expiration': pokestop.lure_start + conf.LURE_DURATION if pokestop.lure_start else 0,
         } for pokestop in pokestops]
 
 

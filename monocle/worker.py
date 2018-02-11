@@ -11,7 +11,7 @@ from aiopogo.auth_ptc import AuthPtc
 from cyrandom import choice, randint, uniform
 from pogeo import get_distance
 
-from .db import FORT_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE, WEATHER_CACHE
+from .db import POKESTOP_CACHE, GYM_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE, WEATHER_CACHE
 from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point
 from .shared import get_logger, LOOP, SessionManager, run_threaded, ACCOUNTS
 from . import altitudes, avatar, bounds, db_proc, spawns, sanitized as conf
@@ -185,7 +185,7 @@ class Worker:
             raise err
 
         self.error_code = '°'
-        version = 8900
+        version = 9100
         async with self.sim_semaphore:
             self.error_code = 'APP SIMULATION'
             if conf.APP_SIMULATION:
@@ -369,10 +369,17 @@ class Worker:
             else:
                 self.log.warning('No player level')
 
+            # request 7: get_store_items
             request = self.api.create_request()
             request.get_store_items()
             await self.call(request, chain=False)
             await self.random_sleep(.43, .97)
+
+            # request 8: fetch_all_news
+            request = self.api.create_request()
+            request.fetch_all_news()
+            await self.call(request)
+            await self.random_sleep(.45, .7)
 
             self.log.info('Finished RPC login sequence (iOS app simulation)')
             await self.random_sleep(.5, 1.3)
@@ -841,11 +848,11 @@ class Worker:
                         cooldown = fort.cooldown_complete_timestamp_ms
                         if not cooldown or time() > cooldown / 1000:
                             await self.spin_pokestop(fort)
-                    if fort.id not in FORT_CACHE.pokestops:
+                    if fort not in POKESTOP_CACHE:
                         pokestop = self.normalize_pokestop(fort)
                         db_proc.add(pokestop)
                 else:
-                    if fort not in FORT_CACHE:
+                    if fort not in GYM_CACHE:
                         db_proc.add(self.normalize_gym(fort))
                     if fort.HasField('raid_info'):
                         if fort not in RAID_CACHE:
@@ -1345,11 +1352,15 @@ class Worker:
 
     @staticmethod
     def normalize_pokestop(raw):
+        lure_start = 0
+        if 501 in raw.active_fort_modifier: #501 is the code for lure
+            lure_start = raw.last_modified_timestamp_ms // 1000
         return {
             'type': 'pokestop',
             'external_id': raw.id,
             'lat': raw.latitude,
-            'lon': raw.longitude
+            'lon': raw.longitude,
+            'lure_start': lure_start,
         }
 
     @staticmethod
