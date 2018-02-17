@@ -787,6 +787,7 @@ class Notifier:
 
         payload = {
             'username': 'Egg' if raid.raid_pokemon.pokemon_id == 0 else POKEMON[raid.raid_pokemon.pokemon_id],
+            'avatar_url': conf.ICONS_URL.format(raid.raid_pokemon.pokemon_id),
             'embeds': [{
                 'title': 'Raid{}'.format(raid.raid_level),
                 'url': self.get_gmaps_link(fort.latitude, fort.longitude),
