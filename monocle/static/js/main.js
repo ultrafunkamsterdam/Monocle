@@ -109,8 +109,28 @@ function getPopupContent (item) {
     var expires_at = minutes + 'm ' + seconds + 's';
     var content = '<b>' + item.name + '</b> - <a href="https://pokemongo.gamepress.gg/pokemon/' + item.pokemon_id + '">#' + item.pokemon_id + '</a>';
     // unown form display
-    if (item.display != undefined && item.pokemon_id === 201) {
-        content += ' - ' + String.fromCharCode(64 + item.display);
+    if (item.display != undefined) {
+        if (item.pokemon_id === 201) {
+            content += ' - ' + String.fromCharCode(64 + item.display);
+        }
+        else if (item.pokemon_id === 351) {
+            content += ' - ';
+            switch (item.display) {
+                case 29:
+                    content += 'Normal';
+                    break;
+                case 30:
+                    content += 'Sunny';
+                    break;
+                case 31:
+                    content += 'Rainy';
+                    break;
+                case 32:
+                default:
+                    content += 'Snowy';
+                    break;
+            }
+        }
     }
     if(item.atk != undefined){
         var totaliv = 100 * (item.atk + item.def + item.sta) / 45;
