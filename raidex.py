@@ -79,7 +79,7 @@ def parks():
 
 @app.route('/cells')
 def cells():
-    return jsonify(get_s2_cells(level=12))
+    return jsonify(get_s2_cells(level=13))
 
 @app.route('/scan_coords')
 def scan_coords():
