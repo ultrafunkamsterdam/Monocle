@@ -19,11 +19,28 @@ from pogeo import get_distance
 
 from . import bounds, sanitized as conf
 
-# iPhones 5 + 5C (4S is really not playable)
+# iPhones 5 and more
 IPHONES = {'iPhone5,1': 'N41AP',
            'iPhone5,2': 'N42AP',
            'iPhone5,3': 'N48AP',
-           'iPhone5,4': 'N49AP'}
+           'iPhone5,4': 'N48AP',
+           'iPhone6,1': 'N51AP',
+           'iPhone6,2': 'N53AP',
+           'iPhone7,1': 'N56AP',
+           'iPhone7,2': 'N61AP',
+           'iPhone8,1': 'N71AP',
+           'iPhone8,2': 'N66AP',
+           'iPhone8,4': 'N69AP',
+           'iPhone9,1': 'D10AP',
+           'iPhone9,2': 'D11AP',
+           'iPhone9,3': 'D101AP',
+           'iPhone9,4': 'D111AP',
+           'iPhone10,1': 'D20AP',
+           'iPhone10,2': 'D21AP',
+           'iPhone10,3': 'D22AP',
+           'iPhone10,4': 'D201AP',
+           'iPhone10,5': 'D211AP',
+           'iPhone10,6': 'D221AP'}
 
 
 class Units(Enum):
@@ -136,24 +153,27 @@ def get_device_info(account):
 
 def generate_device_info(account):
     ios9 = ('9.0', '9.0.1', '9.0.2', '9.1', '9.2', '9.2.1', '9.3', '9.3.1', '9.3.2', '9.3.3', '9.3.4', '9.3.5')
-    # 10.0 was only for iPhone 7 and 7 Plus, and is rare
-    ios10 = ('10.0.1', '10.0.2', '10.0.3', '10.1', '10.1.1', '10.2', '10.2.1', '10.3', '10.3.1', '10.3.2', '10.3.3')
+    ios10 = ('10.0.1', '10.0.2', '10.1', '10.1.1', '10.2', '10.2.1', '10.3', '10.3.1', '10.3.2', '10.3.3')
+    ios11 = ('11.0', '11.0.1', '11.0.2', '11.0.3', '11.1', '11.1.1', '11.1.2', '11.2', '11.2.1', '11.2.2', '11.2.5', '11.2.6')
 
     devices = tuple(IPHONES.keys())
     account['model'] = choice(devices)
 
     account['id'] = uuid4().hex
 
-    if account['model'] in ('iPhone9,1', 'iPhone9,2',
-                            'iPhone9,3', 'iPhone9,4'):
-        account['iOS'] = choice(ios10)
-    elif account['model'] in ('iPhone8,1', 'iPhone8,2'):
+    # 5 & 5C : iOS 9 & 10
+    if account['model'] in ('iPhone5,1', 'iPhone5,2',
+                            'iPhone5,3', 'iPhone5,4'):
         account['iOS'] = choice(ios9 + ios10)
-    elif account['model'] == 'iPhone8,4':
-        # iPhone SE started on 9.3
-        account['iOS'] = choice(('9.3', '9.3.1', '9.3.2', '9.3.3', '9.3.4', '9.3.5') + ios10)
+    # 5S, 6, 6+, 6S, 6S+, SE, 7, 7+ : iOS 10 & 11
+    if account['model'] in ('iPhone6,1', 'iPhone6,2',
+                            'iPhone7,1', 'iPhone7,2',
+                            'iPhone8,1', 'iPhone8,2', 'iPhone8,4',
+                            'iPhone9,1', 'iPhone9,2', 'iPhone9,3', 'iPhone9,4'):
+        account['iOS'] = choice(ios10 + ios11)
+    # others : iOS 11
     else:
-        account['iOS'] = choice(ios9 + ios10)
+        account['iOS'] = choice(ios11)
 
     return account
 
