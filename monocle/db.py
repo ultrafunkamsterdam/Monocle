@@ -219,50 +219,61 @@ class PokestopCache:
     def __contains__(self, pokestop):
         if pokestop.id in self.store:
             p = self.store[pokestop.id]
-            if (p['lat'] == pokestop.latitude and
-                p['lon'] == pokestop.longitude):
-                if 501 in pokestop.active_fort_modifier: #501 is the code for lure
-                    lure_start = pokestop.last_modified_timestamp_ms // 1000
-                    return p['lure_start'] == lure_start
-                else:
-                    return True
+            if (p['name'] != ""):
+                if (p['lat'] == pokestop.latitude and
+                    p['lon'] == pokestop.longitude):
+                    if 501 in pokestop.active_fort_modifier: #501 is the code for lure
+                        lure_start = pokestop.last_modified_timestamp_ms // 1000
+                        return p['lure_start'] == lure_start
+                    else:
+                        return True
         return False
+
+    # Preloading from db
+    def preload(self):
+        with session_scope() as session:
+            pokestops = session.query(Pokestop)
+            for pokestop in pokestops:
+                p = {}
+                p['external_id'] = pokestop.external_id
+                p['name'] = pokestop.name
+                p['lat'] = pokestop.lat
+                p['lon'] = pokestop.lon
+                p['lure_start'] = pokestop.lure_start
+                self.store[p['external_id']] = p
 
 
 class GymCache:
     """Simple cache for storing fort sightings"""
     def __init__(self):
         self.gyms = {}
-        self.class_version = 2
-        self.unpickle()
 
     def __len__(self):
         return len(self.gyms)
 
-    def add(self, sighting):
-        self.gyms[sighting['external_id']] = sighting['last_modified']
+    def add(self, gym):
+        self.gyms[gym['external_id']] = gym
+    
+    def get(self, gym_id):
+        return self.gyms[gym_id]
 
-    def __contains__(self, sighting):
-        try:
-            return self.gyms[sighting.id] == sighting.last_modified_timestamp_ms // 1000
-        except KeyError:
-            return False
+    def __contains__(self, gym):
+        return gym.id in self.gyms
 
-    def pickle(self):
-        state = self.__dict__.copy()
-        state['db_hash'] = spawns.db_hash
-        state['bounds_hash'] = hash(bounds)
-        dump_pickle('forts', state)
-
-    def unpickle(self):
-        try:
-            state = load_pickle('forts', raise_exception=True)
-            if all((state['class_version'] == self.class_version,
-                    state['db_hash'] == spawns.db_hash,
-                    state['bounds_hash'] == hash(bounds))):
-                self.__dict__.update(state)
-        except (FileNotFoundError, TypeError, KeyError):
-            pass
+    # Preloading from db
+    def preload(self):
+        with session_scope() as session:
+            gyms = session.query(Fort)
+            for gym in gyms:
+                g = {}
+                g['external_id'] = gym.external_id
+                g['name'] = gym.name
+                g['url'] = gym.url
+                g['desc'] = gym.desc
+                g['lat'] = gym.lat
+                g['lon'] = gym.lon
+                g['last_modified'] = 0
+                self.gyms[g['external_id']] = g
 
 
 class WeatherCache:
@@ -418,6 +429,9 @@ class Fort(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE)
     lon = Column(FLOAT_TYPE)
+    name = Column(String(50))
+    url = Column(String(200))
+    desc = Column(String(50))
 
     sightings = relationship(
         'FortSighting',
@@ -459,6 +473,9 @@ class Pokestop(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE, index=True)
     lon = Column(FLOAT_TYPE, index=True)
+    name = Column(String(50))
+    url = Column(String(200))
+    desc = Column(String(50))
     lure_start = Column(Integer)
 
 
@@ -613,8 +630,16 @@ def add_fort_sighting(session, raw_fort):
             external_id=raw_fort['external_id'],
             lat=raw_fort['lat'],
             lon=raw_fort['lon'],
+            name=raw_fort['name'],
+            url=raw_fort['url'],
+            desc=raw_fort['desc'],
         )
         session.add(fort)
+    elif fort.name is None:
+        fort.name = raw_fort['name']
+        fort.url = raw_fort['url']
+        fort.desc = raw_fort['desc']
+
     if fort.id and session.query(exists().where(and_(
                 FortSighting.fort_id == fort.id,
                 FortSighting.last_modified == raw_fort['last_modified']
@@ -681,6 +706,9 @@ def add_pokestop(session, raw_pokestop):
     if pokestop:
         pokestop.lat = raw_pokestop['lat']
         pokestop.lon = raw_pokestop['lon']
+        pokestop.name = raw_pokestop['name']
+        pokestop.url = raw_pokestop['url']
+        pokestop.desc = raw_pokestop['desc']
         pokestop.lure_start = raw_pokestop['lure_start']
         # Why is it not in the cache? It should be there!
         POKESTOP_CACHE.add(raw_pokestop)
@@ -690,6 +718,9 @@ def add_pokestop(session, raw_pokestop):
         external_id=pokestop_id,
         lat=raw_pokestop['lat'],
         lon=raw_pokestop['lon'],
+        name=raw_pokestop['name'],
+        url=raw_pokestop['url'],
+        desc=raw_pokestop['desc'],
         lure_start=raw_pokestop['lure_start']
     )
     session.add(pokestop)
@@ -772,6 +803,9 @@ def _get_forts_sqlite(session):
             fs.last_modified,
             f.lat,
             f.lon,
+            f.name,
+            f.desc,
+            f.url,
             fs.slots_available
         FROM fort_sightings fs
         JOIN forts f ON f.id=fs.fort_id
@@ -794,6 +828,9 @@ def _get_forts(session):
             fs.last_modified,
             f.lat,
             f.lon,
+            f.name,
+            f.desc,
+            f.url,
             fs.slots_available
         FROM fort_sightings fs
         JOIN forts f ON f.id=fs.fort_id

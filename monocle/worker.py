@@ -849,11 +849,32 @@ class Worker:
                         if not cooldown or time() > cooldown / 1000:
                             await self.spin_pokestop(fort)
                     if fort not in POKESTOP_CACHE:
-                        pokestop = self.normalize_pokestop(fort)
-                        db_proc.add(pokestop)
+                        fort_details = await self.check_pokestop(fort)
+                        db_proc.add(self.normalize_pokestop(fort, fort_details))
                 else:
                     if fort not in GYM_CACHE:
-                        db_proc.add(self.normalize_gym(fort))
+                        raw_gym_info = await self.check_gym(fort)
+                        gym_info = {}
+                        gym_info['name'] = raw_gym_info.name
+                        gym_info['url'] = raw_gym_info.url
+                        gym_info['desc'] = raw_gym_info.description
+                        g = self.normalize_gym(fort, gym_info)
+                        db_proc.add(g)
+                    else:
+                        g = GYM_CACHE.get(fort.id)
+                        if (g['name'] is None or 
+                            g['lat'] != fort.latitude or
+                            g['lon'] != fort.longitude):
+                            raw_gym_info = await self.check_gym(fort)
+                            gym_info = {}
+                            gym_info['name'] = raw_gym_info.name
+                            gym_info['url'] = raw_gym_info.url
+                            gym_info['desc'] = raw_gym_info.description
+                            g = self.normalize_gym(fort, gym_info)
+                            db_proc.add(g)
+                        elif(g['last_modified'] == fort.last_modified_timestamp_ms // 1000):
+                            g = self.normalize_gym(fort, g)
+                            db_proc.add(g)
                     if fort.HasField('raid_info'):
                         if fort not in RAID_CACHE:
                             if conf.NOTIFY_RAIDS:
@@ -931,6 +952,24 @@ class Worker:
         except (TypeError, KeyError):
             return False
 
+    async def check_pokestop(self, pokestop):
+        request = self.api.create_request()
+        request.fort_details(fort_id = pokestop.id,
+                             latitude = pokestop.latitude,
+                             longitude = pokestop.longitude)
+        responses = await self.call(request, action=1.2)
+        return responses['FORT_DETAILS']
+
+    async def check_gym(self, gym):
+        request = self.api.create_request()
+        request.gym_get_info(gym_id = gym.id,
+                             player_lat_degrees = self.location[0],
+                             player_lng_degrees = self.location[1],
+                             gym_lat_degrees = gym.latitude,
+                             gym_lng_degrees = gym.longitude)
+        responses = await self.call(request, action=1.2)
+        return responses['GYM_GET_INFO']
+
     async def spin_pokestop(self, pokestop):
         self.error_code = '$'
         pokestop_location = pokestop.latitude, pokestop.longitude
@@ -945,12 +984,8 @@ class Worker:
             self.error_code = '!'
             return False
 
-        request = self.api.create_request()
-        request.fort_details(fort_id = pokestop.id,
-                             latitude = pokestop_location[0],
-                             longitude = pokestop_location[1])
-        responses = await self.call(request, action=1.2)
-        name = responses['FORT_DETAILS'].name
+        pokestop_details = await self.check_pokestop(pokestop)
+        name = pokestop_details.name
 
         request = self.api.create_request()
         request.fort_search(fort_id = pokestop.id,
@@ -978,7 +1013,7 @@ class Worker:
                         request = self.api.create_request()
                         request.level_up_rewards(level=level)
                         await self.call(request)
-                        self.log.info('Level up, get rewards.', name)
+                        self.log.info('Level up, get rewards.')
                         self.player_level = level
                         break
             except KeyError:
@@ -1320,17 +1355,20 @@ class Worker:
         }
 
     @staticmethod
-    def normalize_gym(raw):
+    def normalize_gym(raw_fort, gym_info):
         return {
             'type': 'fort',
-            'external_id': raw.id,
-            'lat': raw.latitude,
-            'lon': raw.longitude,
-            'team': raw.owned_by_team,
-            'prestige': raw.gym_points,
-            'guard_pokemon_id': raw.guard_pokemon_id,
-            'last_modified': raw.last_modified_timestamp_ms // 1000,
-            'slots_available': raw.gym_display.slots_available
+            'external_id': raw_fort.id,
+            'lat': raw_fort.latitude,
+            'lon': raw_fort.longitude,
+            'name': gym_info['name'],
+            'url': gym_info['url'],
+            'desc': gym_info['desc'],
+            'team': raw_fort.owned_by_team,
+            'prestige': raw_fort.gym_points,
+            'guard_pokemon_id': raw_fort.guard_pokemon_id,
+            'last_modified': raw_fort.last_modified_timestamp_ms // 1000,
+            'slots_available': raw_fort.gym_display.slots_available
         }
 
     @staticmethod
@@ -1351,15 +1389,18 @@ class Worker:
         }
 
     @staticmethod
-    def normalize_pokestop(raw):
+    def normalize_pokestop(raw_fort, raw_fort_details):
         lure_start = 0
-        if 501 in raw.active_fort_modifier: #501 is the code for lure
-            lure_start = raw.last_modified_timestamp_ms // 1000
+        if 501 in raw_fort.active_fort_modifier: #501 is the code for lure
+            lure_start = raw_fort.last_modified_timestamp_ms // 1000
         return {
             'type': 'pokestop',
-            'external_id': raw.id,
-            'lat': raw.latitude,
-            'lon': raw.longitude,
+            'external_id': raw_fort.id,
+            'lat': raw_fort.latitude,
+            'lon': raw_fort.longitude,
+            'name': raw_fort_details.name,
+            'url': raw_fort_details.image_urls[0],
+            'desc': raw_fort_details.description,
             'lure_start': lure_start,
         }
 

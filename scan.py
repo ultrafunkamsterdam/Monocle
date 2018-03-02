@@ -27,7 +27,7 @@ from monocle.shared import LOOP, get_logger, SessionManager, ACCOUNTS
 from monocle.utils import get_address, dump_pickle
 from monocle.worker import Worker
 from monocle.overseer import Overseer
-from monocle.db import GYM_CACHE, RAID_CACHE
+from monocle.db import GYM_CACHE, RAID_CACHE, POKESTOP_CACHE
 from monocle import altitudes, db_proc, spawns
 
 
@@ -150,7 +150,6 @@ def cleanup(overseer, manager):
 
         print('Dumping pickles...')
         dump_pickle('accounts', ACCOUNTS)
-        GYM_CACHE.pickle()
         altitudes.pickle()
         if conf.CACHE_CELLS:
             dump_pickle('cells', Worker.cells)
@@ -203,6 +202,11 @@ def main():
     overseer.start(args.status_bar)
     launcher = LOOP.create_task(overseer.launch(args.bootstrap, args.pickle))
     activate_hash_server(conf.HASH_KEY)
+
+    RAID_CACHE.preload()
+    POKESTOP_CACHE.preload()
+    GYM_CACHE.preload()
+
     if platform != 'win32':
         LOOP.add_signal_handler(SIGINT, launcher.cancel)
         LOOP.add_signal_handler(SIGTERM, launcher.cancel)

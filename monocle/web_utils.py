@@ -192,6 +192,9 @@ def get_gym_markers(names=POKEMON):
                 'team': fort['team'],
                 'lat': fort['lat'],
                 'lon': fort['lon'],
+                'name': fort['name'],
+                'desc': fort['desc'],
+                'url': fort['url'],
                 'slots_available': fort['slots_available'],
                 'last_modified': fort['last_modified']
         } for fort in forts]
@@ -240,6 +243,9 @@ def get_pokestop_markers():
             'external_id': pokestop.external_id,
             'lat': pokestop.lat,
             'lon': pokestop.lon,
+            'name': pokestop.name,
+            'url': pokestop.url,
+            'desc': pokestop.desc,
             'lure_expiration': pokestop.lure_start + conf.LURE_DURATION if pokestop.lure_start else 0,
         } for pokestop in pokestops]
 
