@@ -219,7 +219,7 @@ class PokestopCache:
     def __contains__(self, pokestop):
         if pokestop.id in self.store:
             p = self.store[pokestop.id]
-            if (p['name'] != ""):
+            if p['name']:
                 if (p['lat'] == pokestop.latitude and
                     p['lon'] == pokestop.longitude):
                     if 501 in pokestop.active_fort_modifier: #501 is the code for lure
