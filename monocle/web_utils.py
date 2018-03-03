@@ -148,6 +148,9 @@ def get_raid_markers(names=POKEMON, moves=MOVES):
                 'move2': moves[raid.move_2],
                 'lat': fort.lat,
                 'lon': fort.lon,
+                'name': fort.name,
+                'url': fort.url,
+                'desc': fort.desc,
                 'time_spawn': raid.time_spawn,
                 'time_battle': raid.time_battle,
                 'time_end': raid.time_end

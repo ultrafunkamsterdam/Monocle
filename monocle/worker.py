@@ -872,7 +872,7 @@ class Worker:
                             gym_info['desc'] = raw_gym_info.description
                             g = self.normalize_gym(fort, gym_info)
                             db_proc.add(g)
-                        elif(g['last_modified'] == fort.last_modified_timestamp_ms // 1000):
+                        elif(g['last_modified'] != fort.last_modified_timestamp_ms // 1000):
                             g = self.normalize_gym(fort, g)
                             db_proc.add(g)
                     if fort.HasField('raid_info'):

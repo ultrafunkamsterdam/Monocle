@@ -156,7 +156,8 @@ function getPopupContent (item) {
 }
 
 function getRaidPopupContent (raw) {
-	var content = '<b>Raid level ' + raw.level + '</b><br>';
+    var content = '<b>' + raw.name + '</b> <a href="' + raw.url + '" target="_blank">Image</a><br>' +
+                  '<b>Raid level ' + raw.level + '</b><br>';
 	var info_link = (raw.pokemon_id === 0) ? '' : ' - <a href="https://pokemongo.gamepress.gg/pokemon/' + raw.pokemon_id + '">#' + raw.pokemon_id + '</a>';
 	content += 'Pokemon: ' + raw.pokemon_name + info_link + '<br>';
 	if (raw.pokemon_id === 0){
