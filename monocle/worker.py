@@ -853,8 +853,10 @@ class Worker:
                         db_proc.add(pokestop)
                 else:
                     if fort not in GYM_CACHE:
-                        gym = self.normalize_gym(fort)
-                        gym = await self.gym_get_info(gym)
+                        basic_gym = self.normalize_gym(fort)
+                        extended_gym = LOOP.create_task(self.gym_get_info(basic_gym))
+                        await sleep(1)
+                        db_proc.add(await extended_gym)
 
 
                     if fort.HasField('raid_info'):
