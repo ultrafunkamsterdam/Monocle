@@ -19,6 +19,9 @@ matrix:
       osx_image: xcode8.2
       language: generic
 
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew upgrade python; fi
+
 install:
   - pip3 install -r requirements.txt
   - python3 setup.py install
