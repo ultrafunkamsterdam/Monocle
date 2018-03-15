@@ -279,6 +279,31 @@ def get_all_parks():
     
     return parks
 
+def get_nest_points():
+    nests = []
+    try:
+        nests = load_pickle('nests', raise_exception=True)
+    except (FileNotFoundError, TypeError, KeyError):
+        parks = get_all_parks()
+        for s in get_spawnpoint_markers():
+            spawn_point = Point(s['lat'],s['lon'])
+            cell = Polygon(get_s2_cell_as_polygon(s['lat'],s['lon'],20)) # s2 lvl 20
+            for p in parks:
+                coords = p['coords']
+                # osm polygon can be a line
+                if len(coords) == 2:
+                    shape = LineString(coords)
+                    if shape.within(cell.centroid):
+                        nests.append(s)
+                        break
+                if len(coords) > 2:
+                    shape = Polygon(coords)
+                    if shape.contains(cell.centroid):
+                        nests.append(s)
+                        break
+        dump_pickle('nests', nests)
+    return nests
+
 def get_s2_cells(n=north, w=west, s=south, e=east, level=12):
     region_covered = s2sphere.LatLngRect.from_point_pair(
         s2sphere.LatLng.from_degrees(n, w),
