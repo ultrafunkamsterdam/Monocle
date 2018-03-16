@@ -148,7 +148,7 @@ function getParks() {
             resolve(response);
         });
     }).then(function (data) {
-        addParksToMap(data, map);
+        addL12CellsToMap(data, map);
     });
 }
 

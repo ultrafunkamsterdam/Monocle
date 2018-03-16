@@ -429,7 +429,7 @@ class Fort(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE)
     lon = Column(FLOAT_TYPE)
-    name = Column(String(50))
+    name = Column(String(100))
     url = Column(String(200))
     desc = Column(Text)
 
@@ -473,7 +473,7 @@ class Pokestop(Base):
     external_id = Column(String(35), unique=True)
     lat = Column(FLOAT_TYPE, index=True)
     lon = Column(FLOAT_TYPE, index=True)
-    name = Column(String(50))
+    name = Column(String(100))
     url = Column(String(200))
     desc = Column(Text)
     lure_start = Column(Integer)
