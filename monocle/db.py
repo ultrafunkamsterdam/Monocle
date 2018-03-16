@@ -431,7 +431,7 @@ class Fort(Base):
     lon = Column(FLOAT_TYPE)
     name = Column(String(50))
     url = Column(String(200))
-    desc = Column(String(50))
+    desc = Column(Text)
 
     sightings = relationship(
         'FortSighting',
@@ -475,7 +475,7 @@ class Pokestop(Base):
     lon = Column(FLOAT_TYPE, index=True)
     name = Column(String(50))
     url = Column(String(200))
-    desc = Column(String(50))
+    desc = Column(Text)
     lure_start = Column(Integer)
 
 
