@@ -1061,3 +1061,13 @@ def get_all_spawn_coords(session, pokemon_id=None):
     if conf.REPORT_SINCE:
         points = points.filter(Sighting.expire_timestamp > SINCE_TIME)
     return points.all()
+
+def get_raids_stats(session):
+     query = session.query(Raid.pokemon_id, func.count(Raid.pokemon_id).label('how_many')) \
+        .group_by(Raid.pokemon_id) \
+        .order_by(desc('how_many'))
+     if conf.REPORT_SINCE:
+        query = query.filter(Raid.time_end > SINCE_TIME)
+     query = query.filter(Raid.pokemon_id != 0)
+     return OrderedDict(query.all())
+

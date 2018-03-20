@@ -151,6 +151,11 @@ def report_main(area_name=conf.AREA_NAME,
             )
         else:
             rare_sightings = []
+
+        raids = db.get_raids_stats(session)
+        raids_pokemons = tuple(raids.items())
+        del raids
+
         js_data = {
             'charts_data': {
                 'punchcard': db.get_punch_card(session),
@@ -161,6 +166,7 @@ def report_main(area_name=conf.AREA_NAME,
                 'rare': [
                     (names[r[0]], r[1]) for r in rare_pokemon
                 ],
+                'raids': [(names[r[0]], r[1]) for r in raids_pokemons],
             },
             'maps_data': {
                 'rare': [sighting_to_report_marker(s) for s in rare_sightings],
@@ -172,6 +178,7 @@ def report_main(area_name=conf.AREA_NAME,
         'top30': [(r[0], names[r[0]]) for r in top_pokemon],
         'bottom30': [(r[0], names[r[0]]) for r in bottom_pokemon],
         'rare': [(r[0], names[r[0]]) for r in rare_pokemon],
+        'raids': [(r[0], names[r[0]]) for r in raids_pokemons],
         'nonexistent': nonexistent
     }
     session_stats = db.get_session_stats(session)

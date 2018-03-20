@@ -28,6 +28,7 @@
             drawPokemonChart(backendData.charts_data.top30, 'top30chart');
             drawPokemonChart(backendData.charts_data.bottom30, 'bottom30chart');
             drawPokemonChart(backendData.charts_data.rare, 'rarechart');
+            drawPokemonChart(backendData.charts_data.raids, 'raidschart');
         }
 
         function drawPokemonChart (data, elemId) {
@@ -168,6 +169,17 @@
         {% endif %}
       {% endfor %}
     </div>
+    <h3>Raids bosses</h3>
+    <p>Ordered by spawn frequency</p>
+    <div class="text-center">
+      {% for icon in icons.raids %}
+        <a href="/report/{{ icon[0] }}"><img src="/static/monocle-icons/larger-icons/{{ icon[0] }}.png" title="#{{ icon[0] }} {{ icon[1] }}"></a>
+        {% if loop.index > 0 and loop.index % 10 == 0 %}
+          <br>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div id="raidschart"></div>
     <h2>Footnotes</h2>
     <p>This report was generated using Monocle, a tool for gathering data about Pokemon Go.</p>
     <p>Check out <a href="https://github.com/Noctem/Monocle">Monocle on GitHub</a> for more info.</p>
