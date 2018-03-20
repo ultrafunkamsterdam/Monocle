@@ -942,9 +942,9 @@ def get_sightings_per_pokemon(session):
 
 # Return a list of species spawn at a point, ordered by frequency
 # Optional arguments START and END are datetime objects for finer control of query
-def get_sightings_per_spawn(session, SPAWN_ID, START=None, END=None):
-    query = session.query(Sighting.pokemon_id, func.count(Sighting.pokemon_id).label('how_many')) \
-        .group_by(Sighting.pokemon_id) \
+def get_sightings_per_spawn(session, START=None, END=None):
+    query = session.query(Sighting.spawn_id, Sighting.pokemon_id, func.count(Sighting.pokemon_id).label('how_many')) \
+        .group_by(Sighting.spawn_id,Sighting.pokemon_id) \
         .order_by(asc('how_many'))
     if conf.REPORT_SINCE:
         query = query.filter(Sighting.expire_timestamp > SINCE_TIME)
@@ -952,9 +952,13 @@ def get_sightings_per_spawn(session, SPAWN_ID, START=None, END=None):
         query = query.filter(Sighting.expire_timestamp > START.timestamp())
     if END:
         query = query.filter(Sighting.expire_timestamp < END.timestamp())
-    query = query.filter(Sighting.spawn_id == SPAWN_ID)
-    ranked = [(r[0],r[1]) for r in query]
-    return list(ranked)
+    ranked = {}
+    for r in query:
+        try:
+            ranked[r[0]].append((r[1],r[2]))
+        except:
+            ranked[r[0]] = [(r[1],r[2])]
+    return dict(ranked)
 
 def sightings_to_csv(since=None, output='sightings.csv'):
     from csv import writer as csv_writer

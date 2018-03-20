@@ -45,10 +45,10 @@ def render_nests():
         social_links=social_links()
     )
 
-def get_spawns_at_point(spawnpoint):
+def get_spawns_at_point():
     with db.session_scope() as session:
-        spawns = db.get_sightings_per_spawn(session, spawnpoint)
-    return list(spawns)
+        spawns = db.get_sightings_per_spawn(session)
+    return dict(spawns)
 
 @app.route('/')
 def nest_map(nests_html=render_nests()):
@@ -63,8 +63,9 @@ def nest_spawns():
             nests = load_pickle('nests_full', raise_exception=True)
             spawns = nests
         except (FileNotFoundError, TypeError, KeyError):
+            sightings_per_spawn = get_spawns_at_point()
             for s in spawns:
-                sorted = get_spawns_at_point(s['spawn_id'])
+                sorted = sightings_per_spawn[s['spawn_id']]
                 total = sum([p[1] for p in sorted])
                 if total == 0:
                     total = 1
