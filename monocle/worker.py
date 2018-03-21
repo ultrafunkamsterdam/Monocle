@@ -853,9 +853,7 @@ class Worker:
                         db_proc.add(self.normalize_pokestop(fort, fort_details))
                 else:
                     if fort not in GYM_CACHE:
-<<<<<<< HEAD
                         raw_gym_info = await self.check_gym(fort)
-                        gym_info = {}
                         gym_info['name'] = raw_gym_info.name
                         gym_info['url'] = raw_gym_info.url
                         gym_info['desc'] = raw_gym_info.description
@@ -863,7 +861,7 @@ class Worker:
                         db_proc.add(g)
                     else:
                         g = GYM_CACHE.get(fort.id)
-                        if (g['name'] is None or 
+                        if (g['name'] is None or
                             g['lat'] != fort.latitude or
                             g['lon'] != fort.longitude):
                             raw_gym_info = await self.check_gym(fort)
@@ -962,15 +960,6 @@ class Worker:
         responses = await self.call(request, action=1.2)
         return responses['FORT_DETAILS']
 
-    async def check_gym(self, gym):
-        request = self.api.create_request()
-        request.gym_get_info(gym_id = gym.id,
-                             player_lat_degrees = self.location[0],
-                             player_lng_degrees = self.location[1],
-                             gym_lat_degrees = gym.latitude,
-                             gym_lng_degrees = gym.longitude)
-        responses = await self.call(request, action=1.2)
-        return responses['GYM_GET_INFO']
 
     async def spin_pokestop(self, pokestop):
         self.error_code = '$'
@@ -1094,17 +1083,13 @@ class Worker:
             self.log.error('Missing encounter response.')
         self.error_code = '!'
 
-
-    async def gym_get_info(self, gym):
-
+    async def check_gym(self, gym):
         distance_to_gym = get_distance(self.location, (gym['lat'], gym['lon']))
         if distance_to_gym > 240:
             return gym
         self.error_code = 'G'
-
         # randomize location up to ~1.4 meters
         self.simulate_jitter(amount=0.00001)
-
         request = self.api.create_request()
         request.gym_get_info(gym_id=gym['external_id'],
                              player_lat_degrees=self.location[0],
@@ -1112,33 +1097,26 @@ class Worker:
                              gym_lat_degrees=gym['lat'],
                              gym_lng_degrees=gym['lon'])
         responses = await self.call(request, action=1)
-
         info = responses['GYM_GET_INFO']
         name = info.name
         result = info.result or 0
-
         if result == 1:
             try:
                 gym['name'] = name
                 gym['url'] = info.url.replace('http:', 'https:')
-
                 for gym_defender in info.gym_status_and_defenders.gym_defender:
                     normalized_defender = self.normalize_gym_defender(
                         gym_defender)
                     gym['gym_defenders'].append(normalized_defender)
-
             except KeyError as e:
                 self.log.error(
                     'Missing Gym data in gym_get_info response. {}', e)
             except Exception as e:
                 self.log.error('Unknown error: in gym_get_info: {}', e)
-
         elif result == 2:
             self.log.info('The server said {} was out of gym details range. {:.1f}m {:.1f}{}',
                           name, distance_to_gym, self.speed, UNIT_STRING)
-
         self.error_code = '!'
-
         return gym
 
 
@@ -1223,8 +1201,6 @@ class Worker:
             self.log.error('Got an error while trying to solve CAPTCHA. '
                            'Check your API Key and account balance.')
             raise CaptchaSolveException from e
-        with open('capcharesponse_debug.log','a+') as f:
-            f.write(format(response))
         code = response.get('request')
         if response.get('status') != 1:
             if code in ('ERROR_WRONG_USER_KEY', 'ERROR_KEY_DOES_NOT_EXIST', 'ERROR_ZERO_BALANCE'):
@@ -1422,7 +1398,7 @@ class Worker:
             'prestige': raw_fort.gym_points,
             'guard_pokemon_id': raw_fort.guard_pokemon_id,
             'last_modified': raw_fort.last_modified_timestamp_ms // 1000,
-            'slots_available': raw_fort.gym_display.slots_available
+            'slots_available': raw_fort.gym_display.slots_available,
             'gym_defenders': [],
         }
 
@@ -1488,9 +1464,7 @@ class Worker:
             'url': raw_fort_details.image_urls[0],
             'desc': raw_fort_details.description,
             'lure_start': lure_start,
-            'lure_username': None,
-            'name': None,
-            'url': None
+            'lure_username': None
         }
 
     @staticmethod
