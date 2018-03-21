@@ -12,7 +12,7 @@ from cyrandom import choice, randint, uniform
 from pogeo import get_distance
 
 from .db import POKESTOP_CACHE, GYM_CACHE, MYSTERY_CACHE, SIGHTING_CACHE, RAID_CACHE, WEATHER_CACHE
-from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point
+from .utils import round_coords, load_pickle, get_device_info, get_start_coords, Units, randomize_point, calc_pokemon_level
 from .shared import get_logger, LOOP, SessionManager, run_threaded, ACCOUNTS
 from . import altitudes, avatar, bounds, db_proc, spawns, sanitized as conf
 
@@ -853,6 +853,7 @@ class Worker:
                         db_proc.add(self.normalize_pokestop(fort, fort_details))
                 else:
                     if fort not in GYM_CACHE:
+<<<<<<< HEAD
                         raw_gym_info = await self.check_gym(fort)
                         gym_info = {}
                         gym_info['name'] = raw_gym_info.name
@@ -875,6 +876,7 @@ class Worker:
                         elif(g['last_modified'] != fort.last_modified_timestamp_ms // 1000):
                             g = self.normalize_gym(fort, g)
                             db_proc.add(g)
+
                     if fort.HasField('raid_info'):
                         if fort not in RAID_CACHE:
                             if conf.NOTIFY_RAIDS:
@@ -976,7 +978,7 @@ class Worker:
 
         # randomize location up to ~1.5 meters
         self.simulate_jitter(amount=0.00001)
-        
+
         distance = get_distance(self.location, pokestop_location)
         # permitted interaction distance - 4 (for some jitter leeway)
         # estimation of spinning speed limit
@@ -1016,6 +1018,7 @@ class Worker:
                         self.log.info('Level up, get rewards.')
                         self.player_level = level
                         break
+
             except KeyError:
                 pass
         elif result == 2:
@@ -1074,9 +1077,11 @@ class Worker:
                 pokemon['individual_attack'] = pdata.individual_attack
                 pokemon['individual_defense'] = pdata.individual_defense
                 pokemon['individual_stamina'] = pdata.individual_stamina
-                pokemon['height'] = pdata.height_m
-                pokemon['weight'] = pdata.weight_kg
+                # pokemon['height'] = pdata.height_m
+                # pokemon['weight'] = pdata.weight_kg
                 pokemon['gender'] = pdata.pokemon_display.gender
+                pokemon['cp'] = pdata.cp
+                pokemon['level'] = calc_pokemon_level(pdata.cp_multiplier)
             elif result == 4:
                 self.log.info('Pokemon that should be encountered has fled')
             elif result == 7:
@@ -1088,6 +1093,54 @@ class Worker:
         except KeyError:
             self.log.error('Missing encounter response.')
         self.error_code = '!'
+
+
+    async def gym_get_info(self, gym):
+
+        distance_to_gym = get_distance(self.location, (gym['lat'], gym['lon']))
+        if distance_to_gym > 240:
+            return gym
+        self.error_code = 'G'
+
+        # randomize location up to ~1.4 meters
+        self.simulate_jitter(amount=0.00001)
+
+        request = self.api.create_request()
+        request.gym_get_info(gym_id=gym['external_id'],
+                             player_lat_degrees=self.location[0],
+                             player_lng_degrees=self.location[1],
+                             gym_lat_degrees=gym['lat'],
+                             gym_lng_degrees=gym['lon'])
+        responses = await self.call(request, action=1)
+
+        info = responses['GYM_GET_INFO']
+        name = info.name
+        result = info.result or 0
+
+        if result == 1:
+            try:
+                gym['name'] = name
+                gym['url'] = info.url.replace('http:', 'https:')
+
+                for gym_defender in info.gym_status_and_defenders.gym_defender:
+                    normalized_defender = self.normalize_gym_defender(
+                        gym_defender)
+                    gym['gym_defenders'].append(normalized_defender)
+
+            except KeyError as e:
+                self.log.error(
+                    'Missing Gym data in gym_get_info response. {}', e)
+            except Exception as e:
+                self.log.error('Unknown error: in gym_get_info: {}', e)
+
+        elif result == 2:
+            self.log.info('The server said {} was out of gym details range. {:.1f}m {:.1f}{}',
+                          name, distance_to_gym, self.speed, UNIT_STRING)
+
+        self.error_code = '!'
+
+        return gym
+
 
     async def clean_bag(self):
         self.error_code = '|'
@@ -1170,7 +1223,8 @@ class Worker:
             self.log.error('Got an error while trying to solve CAPTCHA. '
                            'Check your API Key and account balance.')
             raise CaptchaSolveException from e
-
+        with open('capcharesponse_debug.log','a+') as f:
+            f.write(format(response))
         code = response.get('request')
         if response.get('status') != 1:
             if code in ('ERROR_WRONG_USER_KEY', 'ERROR_KEY_DOES_NOT_EXIST', 'ERROR_ZERO_BALANCE'):
@@ -1369,6 +1423,7 @@ class Worker:
             'guard_pokemon_id': raw_fort.guard_pokemon_id,
             'last_modified': raw_fort.last_modified_timestamp_ms // 1000,
             'slots_available': raw_fort.gym_display.slots_available
+            'gym_defenders': [],
         }
 
     @staticmethod
@@ -1385,8 +1440,39 @@ class Worker:
             'move_2': raw.raid_info.raid_pokemon.move_2 if raw.raid_info.raid_pokemon else 0,
             'time_spawn': raw.raid_info.raid_spawn_ms // 1000,
             'time_battle': raw.raid_info.raid_battle_ms // 1000,
-            'time_end': raw.raid_info.raid_end_ms // 1000
+            'time_end': raw.raid_info.raid_end_ms // 1000,
+            'cp': raw.raid_info.raid_pokemon.cp if raw.raid_info.raid_pokemon else 0
         }
+
+
+    @staticmethod
+    def normalize_gym_defender(raw):
+
+        pokemon = raw.motivated_pokemon.pokemon
+
+        obj = {
+            'type': 'gym_defender',
+            'external_id': pokemon.id,
+            'pokemon_id': pokemon.pokemon_id,
+            'owner_name': pokemon.owner_name,
+            'nickname': pokemon.nickname,
+            'cp': pokemon.cp,
+            'stamina': pokemon.stamina,
+            'stamina_max': pokemon.stamina_max,
+            'atk_iv': pokemon.individual_attack,
+            'def_iv': pokemon.individual_defense,
+            'sta_iv': pokemon.individual_stamina,
+            'move_1': pokemon.move_1,
+            'move_2': pokemon.move_2,
+            'battles_attacked': pokemon.battles_attacked,
+            'battles_defended': pokemon.battles_defended,
+            'num_upgrades': 0,
+        }
+
+        if hasattr(pokemon, 'num_upgrades'):
+            obj['num_upgrades'] = pokemon.num_upgrades
+
+        return obj
 
     @staticmethod
     def normalize_pokestop(raw_fort, raw_fort_details):
@@ -1402,6 +1488,9 @@ class Worker:
             'url': raw_fort_details.image_urls[0],
             'desc': raw_fort_details.description,
             'lure_start': lure_start,
+            'lure_username': None,
+            'name': None,
+            'url': None
         }
 
     @staticmethod

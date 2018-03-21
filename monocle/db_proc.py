@@ -35,7 +35,10 @@ class DatabaseProcessor(Thread):
         while self.running or not self.queue.empty():
             try:
                 item = self.queue.get()
-                item_type = item['type']
+                if not 'type' in item:
+                    item['type'] = False
+                else:
+                    item_type = item['type']
 
                 if item_type == 'pokemon':
                     db.add_sighting(session, item)

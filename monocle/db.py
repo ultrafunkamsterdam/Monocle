@@ -23,10 +23,13 @@ log = get_logger(__name__)
 if conf.DB_ENGINE.startswith('mysql'):
     from sqlalchemy.dialects.mysql import TINYINT, MEDIUMINT, BIGINT, DOUBLE
 
-    TINY_TYPE = TINYINT(unsigned=True)          # 0 to 255
-    MEDIUM_TYPE = MEDIUMINT(unsigned=True)      # 0 to 4294967295
-    HUGE_TYPE = BIGINT(unsigned=True)           # 0 to 18446744073709551615
+    TINY_TYPE = TINYINT(unsigned=True)
+    MEDIUM_TYPE = MEDIUMINT(unsigned=True)
+    UNSIGNED_HUGE_TYPE = BIGINT(unsigned=True)
+    HUGE_TYPE = BIGINT
+    PRIMARY_HUGE_TYPE = HUGE_TYPE
     FLOAT_TYPE = DOUBLE(precision=17, scale=14, asdecimal=False)
+
 elif conf.DB_ENGINE.startswith('postgres'):
     from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION
 
@@ -44,9 +47,11 @@ elif conf.DB_ENGINE.startswith('postgres'):
         def python_type(self):
             return int
 
-    TINY_TYPE = SmallInteger                    # -32768 to 32767
-    MEDIUM_TYPE = Integer                       # -2147483648 to 2147483647
-    HUGE_TYPE = NumInt(precision=20, scale=0)   # up to 20 digits
+    TINY_TYPE = SmallInteger
+    MEDIUM_TYPE = Integer
+    UNSIGNED_HUGE_TYPE = NumInt(precision=20, scale=0)
+    HUGE_TYPE = BigInteger
+    PRIMARY_HUGE_TYPE = HUGE_TYPE
     FLOAT_TYPE = DOUBLE_PRECISION(asdecimal=False)
 else:
     class TextInt(TypeDecorator):
@@ -61,11 +66,12 @@ else:
 
     TINY_TYPE = SmallInteger
     MEDIUM_TYPE = Integer
-    HUGE_TYPE = TextInt
+    UNSIGNED_HUGE_TYPE = TextInt
+    HUGE_TYPE = Integer
+    PRIMARY_HUGE_TYPE = HUGE_TYPE
     FLOAT_TYPE = Float(asdecimal=False)
 
-ID_TYPE = BigInteger if conf.SPAWN_ID_INT else String(11)
-
+ID_TYPE = BigInteger
 
 class Team(Enum):
     none = 0
@@ -209,6 +215,7 @@ class PokestopCache:
     """Simple cache for storing pokestops"""
     def __init__(self):
         self.store = {}
+        self.names = {}
 
     def __len__(self):
         return len(self.store)
@@ -332,11 +339,11 @@ else:
 class Sighting(Base):
     __tablename__ = 'sightings'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(PRIMARY_HUGE_TYPE, primary_key=True)
     pokemon_id = Column(SmallInteger)
-    spawn_id = Column(ID_TYPE)
+    spawn_id = Column(HUGE_TYPE)
     expire_timestamp = Column(Integer, index=True)
-    encounter_id = Column(HUGE_TYPE, index=True)
+    encounter_id = Column(UNSIGNED_HUGE_TYPE, index=True)
     lat = Column(FLOAT_TYPE)
     lon = Column(FLOAT_TYPE)
     atk_iv = Column(TINY_TYPE)
@@ -345,6 +352,10 @@ class Sighting(Base):
     move_1 = Column(SmallInteger)
     move_2 = Column(SmallInteger)
     display = Column(SmallInteger)
+    cp = Column(SmallInteger)
+    gender = Column(SmallInteger)
+    level = Column(SmallInteger)
+    updated = Column(Integer,default=time,onupdate=time)
 
     __table_args__ = (
         UniqueConstraint(
@@ -359,7 +370,7 @@ class Raid(Base):
     __tablename__ = 'raids'
 
     id = Column(Integer, primary_key=True)
-    external_id = Column(String(35), unique=True)
+    external_id = Column(BigInteger, unique=True)
     fort_id = Column(Integer, ForeignKey('forts.id'))
     level = Column(TINY_TYPE)
     pokemon_id = Column(SmallInteger)
@@ -368,6 +379,7 @@ class Raid(Base):
     time_spawn = Column(Integer, index=True)
     time_battle = Column(Integer)
     time_end = Column(Integer)
+    cp = Column(Integer)
 
 
 class Weather(Base):
@@ -386,8 +398,8 @@ class Mystery(Base):
 
     id = Column(Integer, primary_key=True)
     pokemon_id = Column(SmallInteger)
-    spawn_id = Column(ID_TYPE, index=True)
-    encounter_id = Column(HUGE_TYPE, index=True)
+    spawn_id = Column(HUGE_TYPE, index=True)
+    encounter_id = Column(UNSIGNED_HUGE_TYPE, index=True)
     lat = Column(FLOAT_TYPE)
     lon = Column(FLOAT_TYPE)
     first_seen = Column(Integer, index=True)
@@ -399,6 +411,10 @@ class Mystery(Base):
     sta_iv = Column(TINY_TYPE)
     move_1 = Column(SmallInteger)
     move_2 = Column(SmallInteger)
+    gender = Column(SmallInteger)
+    display = Column(SmallInteger)
+    cp = Column(SmallInteger)
+    level = Column(SmallInteger)
 
     __table_args__ = (
         UniqueConstraint(
@@ -413,7 +429,7 @@ class Spawnpoint(Base):
     __tablename__ = 'spawnpoints'
 
     id = Column(Integer, primary_key=True)
-    spawn_id = Column(ID_TYPE, unique=True, index=True)
+    spawn_id = Column(HUGE_TYPE, unique=True, index=True)
     despawn_time = Column(SmallInteger, index=True)
     lat = Column(FLOAT_TYPE)
     lon = Column(FLOAT_TYPE)
@@ -445,6 +461,13 @@ class Fort(Base):
         order_by='Raid.time_end'
     )
 
+    gym_defenders = relationship(
+        'GymDefender',
+        backref='fort',
+        order_by='GymDefender.id',
+        cascade="save-update, merge, delete"
+        )
+
 
 class FortSighting(Base):
     __tablename__ = 'fort_sightings'
@@ -456,6 +479,7 @@ class FortSighting(Base):
     prestige = Column(MEDIUM_TYPE)
     guard_pokemon_id = Column(SmallInteger)
     slots_available = Column(Integer)
+    updated = Column(Integer, default=time, onupdate=time)
 
     __table_args__ = (
         UniqueConstraint(
@@ -465,6 +489,30 @@ class FortSighting(Base):
         ),
     )
 
+
+class GymDefender(Base):
+    __tablename__ = 'gym_defenders'
+
+    id = Column(HUGE_TYPE, primary_key=True)
+    fort_id = Column(Integer, ForeignKey('forts.id', onupdate="CASCADE", ondelete="CASCADE"), nullable=False, index=True)
+    external_id = Column(UNSIGNED_HUGE_TYPE, nullable=False)
+    pokemon_id = Column(Integer)
+    team = Column(TINY_TYPE)
+    owner_name = Column(String(32))
+    nickname = Column(String(32))
+    cp = Column(Integer)
+    stamina = Column(Integer)
+    stamina_max = Column(Integer)
+    atk_iv = Column(SmallInteger)
+    def_iv = Column(SmallInteger)
+    sta_iv = Column(SmallInteger)
+    move_1 = Column(SmallInteger)
+    move_2 = Column(SmallInteger)
+    last_modified = Column(Integer)
+    battles_attacked = Column(Integer)
+    battles_defended = Column(Integer)
+    num_upgrades = Column(SmallInteger)
+    created = Column(Integer, index=True)
 
 class Pokestop(Base):
     __tablename__ = 'pokestops'
@@ -477,6 +525,10 @@ class Pokestop(Base):
     url = Column(String(200))
     desc = Column(Text)
     lure_start = Column(Integer)
+    lure_username = Column(String(32))
+    name = Column(String(128))
+    url = Column(String(200))
+    updated = Column(Integer, default=time, onupdate=time)
 
 
 @contextmanager
@@ -515,10 +567,46 @@ def add_sighting(session, pokemon):
         sta_iv=pokemon.get('individual_stamina'),
         move_1=pokemon.get('move_1'),
         move_2=pokemon.get('move_2'),
-        display=pokemon.get('display')
+        display=pokemon.get('display'),
+        gender=pokemon.get('gender', 0),
+        cp=pokemon.get('cp'),
+        level=pokemon.get('level')
     )
     session.add(obj)
     SIGHTING_CACHE.add(pokemon)
+
+
+def add_gym_defenders(session, fort_internal_id, gym_defenders, raw_fort):
+
+    fort = session.query(Fort).filter(Fort.external_id==raw_fort['external_id']).first()
+    fort_internal_id = fort.id
+
+    session.query(GymDefender).filter(
+        GymDefender.fort_id == fort_internal_id).delete()
+
+    for gym_defender in gym_defenders:
+        obj = GymDefender(
+            fort_id=fort_internal_id,
+            external_id=gym_defender['external_id'],
+            pokemon_id=gym_defender['pokemon_id'],
+            owner_name=gym_defender['owner_name'],
+            nickname=gym_defender['nickname'],
+            cp=gym_defender['cp'],
+            stamina=gym_defender['stamina'],
+            stamina_max=gym_defender['stamina_max'],
+            atk_iv=gym_defender['atk_iv'],
+            def_iv=gym_defender['def_iv'],
+            sta_iv=gym_defender['sta_iv'],
+            move_1=gym_defender['move_1'],
+            move_2=gym_defender['move_2'],
+            team=raw_fort.get('team', 0),
+            last_modified=raw_fort['last_modified'],
+            battles_attacked=gym_defender['battles_attacked'],
+            battles_defended=gym_defender['battles_defended'],
+            num_upgrades=gym_defender['num_upgrades'],
+            created=round(time()),
+        )
+        session.add(obj)
 
 
 def add_spawnpoint(session, pokemon):
@@ -647,13 +735,18 @@ def add_fort_sighting(session, raw_fort):
         # Why is it not in the cache? It should be there!
         GYM_CACHE.add(raw_fort)
         return
+
+    if fort.id and ( 'gym_defenders' in raw_fort and len(raw_fort['gym_defenders']) > 0 ):
+            add_gym_defenders(session, fort.id, raw_fort['gym_defenders'], raw_fort)
+
     obj = FortSighting(
         fort=fort,
         team=raw_fort['team'],
         prestige=raw_fort['prestige'],
         guard_pokemon_id=raw_fort['guard_pokemon_id'],
         last_modified=raw_fort['last_modified'],
-        slots_available=raw_fort['slots_available']
+        slots_available=raw_fort['slots_available'],
+        updated=int(time())
     )
     session.add(obj)
     GYM_CACHE.add(raw_fort)
@@ -692,7 +785,8 @@ def add_raid(session, raw_raid):
         move_2=raw_raid['move_2'],
         time_spawn=raw_raid['time_spawn'],
         time_battle=raw_raid['time_battle'],
-        time_end=raw_raid['time_end']
+        time_end=raw_raid['time_end'],
+        cp=raw_raid['cp']
     )
     session.add(raid)
     RAID_CACHE.add(raw_raid)
@@ -710,6 +804,8 @@ def add_pokestop(session, raw_pokestop):
         pokestop.url = raw_pokestop['url']
         pokestop.desc = raw_pokestop['desc']
         pokestop.lure_start = raw_pokestop['lure_start']
+        pokestop.name = raw_pokestop['name']
+        pokestop.url = raw_pokestop['url']
         # Why is it not in the cache? It should be there!
         POKESTOP_CACHE.add(raw_pokestop)
         return
