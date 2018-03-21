@@ -1084,7 +1084,7 @@ class Worker:
         self.error_code = '!'
 
     async def check_gym(self, gym):
-        distance_to_gym = get_distance(self.location, (gym['lat'], gym['lon']))
+        distance_to_gym = get_distance(self.location, (gym.lat, gym.lon))
         if distance_to_gym > 240:
             return gym
         self.error_code = 'G'
